@@ -1,0 +1,5 @@
+# Sim images tested (recorded 2026-09-24, sim-setup@1.0.28)
+simstudio ghcr.io/simstudioai/simstudio@sha256:26de481ae99cf99d732911094f8ab5ff53bdd6ec488e53da4c5f3099bc56a397 created=2026-09-23T17:36:57.364584288Z
+realtime ghcr.io/simstudioai/realtime@sha256:feebfd0bd9689b3b358c8c2e90fe140b1b5d31e31c037d4feeddb4ea967a2002 created=2026-09-23T16:34:21.114519192Z
+cron ghcr.io/simstudioai/cron@sha256:825c4c6384689b0a0c84d670253235c9695a96c7c9d40f12dd42a281c6e08dec created=2026-09-23T16:34:05.63417536Z
+migrations ghcr.io/simstudioai/migrations@sha256:1c285cf716b21e8fa46f491a05f34b81bce329ee6bc06927d70039b73f08aefd created=2026-09-23T16:34:02.233579065Z

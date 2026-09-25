@@ -1,0 +1,14 @@
+# Friction log: using Sim as a customer
+
+Plain list, dated. What was hard, confusing, or surprising. No fixes to Sim's code.
+
+- 2026-09-24: Docs for logs (docs.sim.ai/execution/logging) point to the API reference, and the API reference page lists endpoint names without params. The per-run endpoint (`GET /api/v2/logs/{runId}`, `includeTraceSpans` on the list endpoint) is only discoverable from `/openapi.json`.
+- 2026-09-24: API reference says base URL is `https://www.sim.ai` with no note on what changes for a self-hosted install.
+- 2026-09-24: `sim-setup@1.0.28` Quick mode warned that the Docker VM had 3.8GB and recommended 8GB+. Useful catch, but the README only says "Node 20+ and Docker" and never mentions memory, so a customer would first find out mid-wizard.
+- 2026-09-24: The wizard detects a shell LLM key (ANTHROPIC_API_KEY), then separately asks to "Generate your Chat API key in the browser". It isn't clear from the wizard whether Chat needs a sim.ai cloud account on a self-hosted install, or whether the detected key covers it.
+- 2026-09-24: `npx sim-setup status` reports `postgres (sim-postgres): absent` and `redis (sim-redis): absent` while both containers are running and healthy. The actual names are `sim-<hash>-db-1` and `sim-<hash>-redis-1` (Compose project prefix), so status looks up the wrong names. A customer would reasonably think their database failed to start.
+- 2026-09-24: The Compose file pins every Sim image to `:latest` by default (`SIM_VERSION` unset). A self-hosted customer can't tell which version they're running without inspecting image digests, and `update` will silently change it. Recorded digests in SIM_VERSION.txt.
+- 2026-09-24: The wizard detected ANTHROPIC_API_KEY and wrote it to `.env`, but on a self-hosted install the Agent block still asks for its own API key. From the shipped bundle, server-side provider keys appear to apply only when `isHosted`, and the Anthropic key-rotation config has no `ANTHROPIC_API_KEY` fallback, unlike OpenAI and Gemini. (Read from minified code, not confirmed in source.) A customer reasonably expects the key they gave setup to be used.
+- 2026-09-24: The block picker shows both "Agent" and "Claude Managed Agents". When you're looking for how to call Claude, it's easy to pick the wrong one.
+- 2026-09-24: After deploying, I couldn't find the workflow ID in the UI. I got it from the database instead. (It's also the last segment of the editor URL, `/workspace/<ws>/w/<workflowId>`.) The API docs require `{workflowId}` in every call, so it should be one click away from Deploy.
+- 2026-09-24: A synchronous execute returns `status: completed`, but `GET /api/v2/logs/{runId}` called right after still returns `status: running` and `endedAt: null`. The log is finalized about 2ms later. The docs don't mention it, and a harness that reads logs immediately after execute gets empty timings. Workaround: poll until the status is final.
