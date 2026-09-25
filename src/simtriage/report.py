@@ -245,18 +245,39 @@ def caught(output, issue, gold, tax):
     return {"label_free": free, "label_dependent": dep, "union": free or dep}
 
 
-def evaluator_flags(d, cutoff=3, min_votes=2):
-    """input_id -> flagged, under the pre-registered rule (any metric <= cutoff in >= 2 of 3 repeats)."""
-    votes = defaultdict(list)
+def evaluator_flags(d, cutoff=3, rule="majority"):
+    """input_id -> flagged (any metric <= cutoff).
+    majority (primary, pre-registered): >= 2 of 3 valid runs flag; inputs with fewer
+    than 3 valid runs get no verdict. single: the repeat-0 run alone (secondary)."""
+    runs = defaultdict(dict)
     for r in d.evaluator:
         vals = [(r.get("scores") or {}).get(m) for m in EVAL_METRICS]
         if r.get("ok") and all(isinstance(v, (int, float)) for v in vals):
-            votes[r["input_id"]].append(min(vals) <= cutoff)
-    return {k: sum(v) >= min_votes for k, v in votes.items() if len(v) >= min_votes}
+            runs[r["input_id"]][r["repeat"]] = min(vals) <= cutoff
+    if rule == "single":
+        return {k: v[0] for k, v in runs.items() if 0 in v}
+    return {k: sum(v.values()) >= 2 for k, v in runs.items() if len(v) >= 3}
+
+
+def evaluator_stability(d, cutoff=3):
+    """On the variance subset (3 runs each): how often all 3 runs give the same verdict,
+    and the per-metric score spread."""
+    runs = defaultdict(list)
+    for r in d.evaluator:
+        vals = [(r.get("scores") or {}).get(m) for m in EVAL_METRICS]
+        if r.get("ok") and all(isinstance(v, (int, float)) for v in vals):
+            runs[r["input_id"]].append(vals)
+    multi = {k: v for k, v in runs.items() if len(v) >= 3}
+    same = sum(len({min(v) <= cutoff for v in vs}) == 1 for vs in multi.values())
+    spread = {m: sum(max(v[j] for v in vs) - min(v[j] for v in vs) for vs in multi.values()) / len(multi)
+              for j, m in enumerate(EVAL_METRICS)} if multi else None
+    return {"verdict_identical_across_3_runs": wilson(same, len(multi)),
+            "mean_score_range": {k: round(v, 3) for k, v in spread.items()} if spread else None}
 
 
 def mutation_recall(d):
     flags = evaluator_flags(d)
+    single = evaluator_flags(d, rule="single")
     per = defaultdict(lambda: defaultdict(lambda: [0, 0]))
     not_applicable = defaultdict(int)
     for m in d.mutants:
@@ -266,6 +287,9 @@ def mutation_recall(d):
         c = caught(m["output"], d.issues[m["issue_id"]], d.key[m["issue_id"]], d.tax)
         if m["mutant_id"] in flags:
             c["evaluator"] = flags[m["mutant_id"]]
+            c["gates_or_evaluator"] = c["label_free"] or c["evaluator"]
+        if m["mutant_id"] in single:
+            c["evaluator_single_run"] = single[m["mutant_id"]]
         for checker, hit in c.items():
             per[m["operator"]][checker][0] += hit
             per[m["operator"]][checker][1] += 1
@@ -338,6 +362,7 @@ def build(d, split):
         "mutation": mutation_recall(d) if d.mutants else None,
         "natural_errors": natural_error_detection(d, split),
         "evaluator_sweep": evaluator_sweep(d) if d.evaluator else None,
+        "evaluator_stability": evaluator_stability(d) if d.evaluator else None,
         "key_disagreements": key_disagreements(d),
     }
 

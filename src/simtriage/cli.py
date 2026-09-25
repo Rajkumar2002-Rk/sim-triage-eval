@@ -75,7 +75,7 @@ def cmd_mutate(args):
 def cmd_evaluate(args):
     from . import evaluator
     wf = args.workflow_id or os.environ.get("SIM_EVAL_WORKFLOW_ID")
-    if not os.environ.get("SIM_API_KEY") or not wf:
+    if not args.dry_run and (not os.environ.get("SIM_API_KEY") or not wf):
         print("set SIM_API_KEY and SIM_EVAL_WORKFLOW_ID (or --workflow-id)", file=sys.stderr)
         return EXIT_USAGE
     d = _data(args)
@@ -85,7 +85,13 @@ def cmd_evaluate(args):
         print(f"no mutants; run `simtriage mutate --dataset {args.dataset} --version {args.version}`",
               file=sys.stderr)
         return EXIT_NO_DATA
-    n_inputs, n_jobs = evaluator.run(_client(), wf, d, args.repeats, args.concurrency, limit=args.limit)
+    if args.dry_run:
+        rows = evaluator.build_inputs(d) if args.sample else evaluator.build_inputs(d, None, None, None)
+        jobs = evaluator.plan_jobs(rows) if args.sample else evaluator.plan_full(rows, args.repeats)
+        print(f"{args.dataset}: {len(rows)} inputs, {len(jobs)} evaluator calls planned")
+        return EXIT_OK
+    n_inputs, n_jobs = evaluator.run(_client(), wf, d, args.concurrency, limit=args.limit,
+                                     sample=args.sample, repeats=args.repeats)
     print(f"{n_inputs} inputs, {n_jobs} evaluator runs recorded")
     return EXIT_OK
 
@@ -145,9 +151,12 @@ def main(argv=None):
 
     ev = sub.add_parser("evaluate", help="score seeds, mutants and natural errors with Sim's Evaluator")
     common(ev)
+    ev.add_argument("--concurrency", type=int, default=3)
+    ev.add_argument("--limit", type=int, help="only the first N inputs")
     ev.add_argument("--repeats", type=int, default=3)
-    ev.add_argument("--concurrency", type=int, default=4)
-    ev.add_argument("--limit", type=int, help="only the first N inputs (dry run)")
+    ev.add_argument("--sample", action="store_true",
+                    help="cheaper sampled plan (40 per operator, 1 run + variance subset)")
+    ev.add_argument("--dry-run", action="store_true", help="print the planned call count; no API calls")
     ev.add_argument("--workflow-id")
     ev.set_defaults(fn=cmd_evaluate)
 

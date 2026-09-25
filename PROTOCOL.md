@@ -128,3 +128,9 @@ and CI runs it.
   from the metrics ("... only scores"). The Evaluator runs as Sim ships it:
   default model (`claude-sonnet-5` in this image, recorded from the logs),
   temperature 0.1. The 3 repeats already capture its run-to-run variation.
+- 2026-09-25, before any Evaluator run: the Evaluator runs as pre-registered
+  (every input, 3 runs, flagged if 2 of 3 runs flag). Two additions: (1) runs
+  are ordered repeat-major (every input's first run before any second run),
+  so a run cut short by API credits still covers every input once; (2) a
+  single-run verdict (repeat 0 only) is reported as a secondary column, to
+  show what a customer running the Evaluator once per output would see.
