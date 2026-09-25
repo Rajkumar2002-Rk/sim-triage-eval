@@ -136,3 +136,11 @@ def test_majority_baseline_is_chosen_on_dev(project):
     # dev = sim-1 (high), sim-2 (medium): tie broken by first seen -> "high"; test has urgent, low
     assert f["priority"]["majority_baseline"]["always"] == "high"
     assert f["priority"]["majority_baseline"]["k"] == 0
+
+
+def test_best_record_prefers_success_after_rate_limit():
+    rows = [{"issue_id": "a", "repeat": 0, "http_status": 429},
+            {"issue_id": "a", "repeat": 0, "http_status": 200, "x": 1},
+            {"issue_id": "b", "repeat": 0, "http_status": 429}]
+    best = {(r["issue_id"], r["repeat"]): r for r in report.best_records(rows, ("issue_id", "repeat"))}
+    assert best[("a", 0)]["x"] == 1 and best[("b", 0)]["http_status"] == 429

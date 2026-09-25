@@ -92,3 +92,36 @@ def test_run_is_resumable(tmp_path, monkeypatch):
     assert runner.run(c, "wf", issues, "v1", out, repeats=2) == 2
     assert runner.run(c, "wf", issues, "v1", out, repeats=2) == 0
     assert runner.run(c, "wf", issues, "v1", out, repeats=3) == 1
+
+
+def test_rate_limited_calls_wait_and_retry():
+    calls = {"n": 0}
+
+    def handler(request):
+        if request.method == "POST":
+            calls["n"] += 1
+            if calls["n"] <= 2:
+                return httpx.Response(429, json={"error": {"code": "RATE_LIMITED",
+                                      "details": {"retryAfter": "2000-01-01T00:00:00Z"}}})
+            return httpx.Response(200, json={"data": {"runId": "r1", "status": "completed",
+                                                      "output": {**TRIAGE, "model": "m"}}})
+        return httpx.Response(200, json={"data": {"status": "completed"}})
+    slept = []
+    c = SimClient("http://sim", "k", transport=httpx.MockTransport(handler))
+    rec = runner.run_one(c, "wf", {"id": "x-1", "title": "t", "body": "b"}, 0, "v1", sleep=slept.append)
+    assert rec["http_status"] == 200 and rec["triage"] == TRIAGE
+    assert rec["rate_limited_waits_s"] == [1.0, 1.0] and slept == [1.0, 1.0]   # past retryAfter -> min wait
+
+
+def test_retry_after_parsing():
+    from datetime import datetime, timedelta, timezone
+    soon = (datetime.now(timezone.utc) + timedelta(seconds=10)).isoformat().replace("+00:00", "Z")
+    assert 9 <= runner.retry_after_s({"error": {"details": {"retryAfter": soon}}}) <= 11.5
+    assert runner.retry_after_s({"nope": 1}) == 15.0
+
+
+def test_rate_limited_records_are_not_done(tmp_path):
+    out = tmp_path / "o.jsonl"
+    out.write_text(json.dumps({"issue_id": "a", "repeat": 0, "http_status": 429}) + "\n"
+                   + json.dumps({"issue_id": "b", "repeat": 0, "http_status": 200}) + "\n")
+    assert runner.done_keys(out) == {("b", 0)}

@@ -40,6 +40,18 @@ def apply_adjudications(key, adjudications):
     return out
 
 
+def best_records(rows, key):
+    """One record per key: the last one that reached Sim and wasn't rate-limited,
+    else the last attempt. Every attempt stays in the file for telemetry."""
+    best = {}
+    for r in rows:
+        k = tuple(r[f] for f in key)
+        done = r.get("http_status") not in (None, 429)
+        if done or k not in best or best[k].get("http_status") in (None, 429):
+            best[k] = r
+    return list(best.values())
+
+
 class Data:
     def __init__(self, root=".", dataset="sim", version="v1", key="original"):
         r = Path(root)
@@ -57,9 +69,11 @@ class Data:
         ex = base / "excluded.json"
         self.excluded = set(json.load(open(ex))) if ex.exists() else set()
         run = r / "runs" / dataset / version
-        self.outputs = [o for o in load_jsonl(run / "outputs.jsonl") if o.get("version") == version]
+        self.attempts = [o for o in load_jsonl(run / "outputs.jsonl") if o.get("version") == version]
+        self.outputs = best_records(self.attempts, ("issue_id", "repeat"))
         self.mutants = load_jsonl(run / "mutants.jsonl")
-        self.evaluator = load_jsonl(run / "evaluator.jsonl")
+        self.eval_attempts = load_jsonl(run / "evaluator.jsonl")
+        self.evaluator = best_records(self.eval_attempts, ("input_id", "repeat"))
         self.run_dir = run
 
     def ids(self, split):
@@ -177,9 +191,13 @@ def telemetry(d, split):
             costs.append(c["total"])
             model_costs.append(sum(i.get("cost", 0) for i in c.get("items", []) if i.get("category") == "model"))
     pct = lambda vals: {"p50": percentile(vals, 0.5), "p95": percentile(vals, 0.95)}
+    attempts = [o for o in d.attempts if o["issue_id"] in ids]
+    rate_limited = (sum(o.get("http_status") == 429 for o in attempts)
+                    + sum(len(o.get("rate_limited_waits_s") or []) for o in attempts))
     return {
         "runs": len(outs),
         "execution_failures": wilson(sum(not ok_exec(o) for o in outs), len(outs)),
+        "sim_rate_limited_responses": rate_limited,
         "client_ms": pct([o.get("client_ms") for o in outs]),
         "server_total_ms": pct([(o.get("log") or {}).get("total_ms") for o in outs]),
         "agent_block_ms": pct(agent_ms),

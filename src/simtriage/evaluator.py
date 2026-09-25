@@ -4,13 +4,13 @@ Input ids: "seed:<issue>", "<issue>:<operator>" (mutants), "natural:<issue>".
 Each input is scored `repeats` times; the flag rule lives in report.evaluator_flags.
 """
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
-import httpx
-
 from . import report
+from .runner import execute_with_backoff, is_done
 from .sim_client import flatten_spans
 
 METRICS = ("classification", "faithfulness", "consistency")
@@ -39,18 +39,13 @@ def load_rubric(dataset):
     return Path(f"prompts/{dataset}/evaluator_system.md").read_text()
 
 
-def score_one(client, workflow_id, row, issue, repeat, rubric, retries=2):
-    for attempt in range(retries + 1):
-        try:
-            status, body, client_ms = client.execute(workflow_id, {
-                "rubric": rubric, "issue": format_issue(issue),
-                "triage_output": format_output(row["output"])})
-            break
-        except httpx.TransportError as e:
-            err = f"{type(e).__name__}: {e}"
-    else:
+def score_one(client, workflow_id, row, issue, repeat, rubric, retries=2, sleep=time.sleep):
+    status, body, client_ms, attempts, waits = execute_with_backoff(
+        client, workflow_id, {"rubric": rubric, "issue": format_issue(issue),
+                              "triage_output": format_output(row["output"])}, retries, sleep=sleep)
+    if status is None:
         return {"input_id": row["input_id"], "issue_id": row["issue_id"], "repeat": repeat,
-                "http_status": None, "ok": False, "error": err}
+                "http_status": None, "ok": False, "error": attempts, "rate_limited_waits_s": waits}
     data = body.get("data", {}) if isinstance(body, dict) else {}
     output = data.get("output") if isinstance(data.get("output"), dict) else {}
     scores = {m: output.get(m) for m in METRICS}
@@ -60,6 +55,7 @@ def score_one(client, workflow_id, row, issue, repeat, rubric, retries=2):
            "ok": status == 200 and all(isinstance(v, (int, float)) for v in scores.values()),
            "scores": scores, "model": output.get("model"), "cost": output.get("cost"),
            "error": data.get("error"), "client_ms": round(client_ms, 1), "raw_output": output,
+           "rate_limited_waits_s": waits,
            "recorded_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     if rec["run_id"]:
         _, log, waited = client.get_log(rec["run_id"])
@@ -88,4 +84,4 @@ def done_keys_eval(out_path):
     p = Path(out_path)
     if not p.exists():
         return set()
-    return {(r["input_id"], r["repeat"]) for r in map(json.loads, p.open()) if r.get("http_status") is not None}
+    return {(r["input_id"], r["repeat"]) for r in map(json.loads, p.open()) if is_done(r)}
