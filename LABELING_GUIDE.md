@@ -38,7 +38,7 @@ Tie-breakers, applied in this order:
 | value | use when |
 |---|---|
 | `urgent` | Security vulnerability, data loss or corruption, or a core path broken for most users (for example the latest image can't start at all) |
-| `high` | A bug that blocks the reporter's main use of Sim with no workaround given; any install or self-hosting blocker |
+| `high` | A bug that blocks the reporter's main use of Sim with no workaround given; an install or self-hosting blocker, unless the issue itself gives a working workaround (then `medium`) |
 | `medium` | A bug with a workaround or in a narrow feature; a well-argued feature or integration request |
 | `low` | Cosmetic issues, speculative ideas, questions, docs nits, invalid |
 
@@ -46,8 +46,8 @@ Tie-breakers, applied in this order:
 
 | value | covers |
 |---|---|
-| `self_hosting` | Docker, Compose, Kubernetes, Helm, env vars, migrations, running a deployed instance |
-| `dev_setup` | Building or running from source, devcontainers, tests, contributor tooling |
+| `self_hosting` | Docker, Compose, Kubernetes, Helm, env vars, migrations, running a deployed instance, and running Sim from source (for example `bun run dev`) when the goal is to use Sim |
+| `dev_setup` | Contributing to Sim's code: devcontainers, tests, lint and build tooling, contributor workflow |
 | `workflow_editor` | The canvas and editor UI: block configuration UI, undo and redo, layout, import and export |
 | `execution_engine` | Running workflows: block execution, variables, loops and parallel, function blocks, timeouts, streaming |
 | `agents_models` | The Agent block and LLM providers and models |
@@ -108,4 +108,8 @@ You don't write summaries; the workflow does. Summaries are checked by gates
 
 ## Changes after freeze
 
-(none)
+- 2026-09-25, before the first label: an install blocker with a working
+  workaround stated in the issue is `medium`, not `high`. Running Sim from
+  source to use it is `self_hosting`; `dev_setup` is for contributing to the
+  code. Both gaps were found while explaining the guide, and both rules were
+  decided by the labeler.
