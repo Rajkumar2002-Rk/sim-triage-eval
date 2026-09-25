@@ -1,0 +1,63 @@
+{
+  "name": "triage",
+  "strict": true,
+  "schema": {
+    "additionalProperties": false,
+    "properties": {
+      "category": {
+        "enum": [
+          "bug",
+          "feature_request",
+          "integration_request",
+          "question",
+          "docs",
+          "security",
+          "invalid"
+        ],
+        "type": "string"
+      },
+      "priority": {
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "urgent"
+        ],
+        "type": "string"
+      },
+      "product_area": {
+        "enum": [
+          "self_hosting",
+          "dev_setup",
+          "workflow_editor",
+          "execution_engine",
+          "agents_models",
+          "copilot",
+          "integrations",
+          "mcp",
+          "api_deployment",
+          "auth_accounts",
+          "logs_observability",
+          "other"
+        ],
+        "type": "string"
+      },
+      "needs_human": {
+        "type": "boolean"
+      },
+      "summary": {
+        "maxLength": 160,
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "required": [
+      "category",
+      "priority",
+      "product_area",
+      "needs_human",
+      "summary"
+    ],
+    "type": "object"
+  }
+}
