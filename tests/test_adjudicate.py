@@ -45,3 +45,14 @@ def test_gate_queue_records_verdicts_and_resumes(project, monkeypatch):  # noqa:
     assert adjudicate.run_gates(".", "v1") == 0
     g = report.gate_adjudications(report.Data(".", "sim", "v1"))
     assert g["summary_entities"]["false_alarm"] == 1
+
+
+def test_evaluator_flag_review_summary(project):  # noqa: F811
+    rows = [{"kind": "evaluator_flag", "mode": "fields", "evaluator_flagged": True, "verdict": "true_defect"},
+            {"kind": "evaluator_flag", "mode": "fields", "evaluator_flagged": True, "verdict": "false_alarm"},
+            {"kind": "evaluator_flag", "mode": "fields", "evaluator_flagged": False, "verdict": "false_alarm"},
+            {"kind": "evaluator_flag", "mode": "fields", "evaluator_flagged": False, "verdict": "unsure"}]
+    (project / "data/sim/adjudications.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    r = report.evaluator_flag_review(report.Data(".", "sim", "v1"))
+    assert r["fields_flagged_really_wrong"]["k"] == 1 and r["fields_flagged_really_wrong"]["n"] == 2
+    assert r["fields_not_flagged_really_wrong"]["n"] == 1          # "unsure" is left out

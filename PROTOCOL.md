@@ -144,4 +144,11 @@ and CI runs it.
   Evaluator once per output would use it. The 2-of-3 majority rule stays in
   the code and is reported only where 3 runs exist. Judge consistency may be
   measured later on a small subset, if budget allows.
+- 2026-09-25, after the Evaluator pass: section 7 said every Evaluator flag on
+  a clean seed is reviewed by hand. There are 85 such flags, and almost all are
+  on fields that have no answer key (priority, area, needs_human for Sim).
+  The review is instead: every faithfulness flag (8, judged on the summary
+  alone), plus a blind, shuffled sample of 15 Sim seeds the Evaluator flagged
+  on classification and 15 it didn't. The reviewer is never shown scores or
+  group membership. The report gives the "really wrong" rate for both groups.
 

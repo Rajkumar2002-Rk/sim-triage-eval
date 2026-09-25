@@ -8,6 +8,11 @@ Two queues:
   gates Every label-free gate failure on a real v1 output (both datasets). The
         reviewer sees the issue, the summary and the flagged detail, and marks
         it a true defect or a false alarm.
+  eval  Sim Evaluator flags on clean seeds: (a) every summary the Evaluator
+        scored unfaithful (faithfulness <= 3), judged on the summary alone;
+        (b) a blind, shuffled mix of EVAL_SAMPLE seeds it flagged on
+        classification and EVAL_SAMPLE it didn't. The reviewer is never shown
+        scores or which group an item is from.
 
 Saves after every answer to data/<ds>/adjudications.jsonl; rerunning resumes.
 """
@@ -18,7 +23,11 @@ import textwrap
 from datetime import datetime, timezone
 from pathlib import Path
 
+import random
+
 from . import gates, report
+
+EVAL_SAMPLE, EVAL_SEED = 15, 20260925
 
 
 class Quit(Exception):
@@ -148,4 +157,63 @@ def run_gates(root=".", version="v1"):
     left = sum(q["record_id"] not in _existing(Path(root) / f"data/{q['dataset']}/adjudications.jsonl",
                                                "gate_failure") for q in queue)
     print(f"\ngate failures: {len(queue) - left}/{len(queue)} done")
+    return 0 if left == 0 else 1
+
+
+def eval_queue(root=".", version="v1"):
+    items = []
+    for ds in ("sim", "k8s"):
+        d = report.Data(root, ds, version)
+        seeds = {f"seed:{s['issue_id']}": s for s in report.seeds(d)}
+        r0 = {r["input_id"]: r for r in d.evaluator if r["repeat"] == 0 and r.get("ok")}
+        for sid, s in sorted(seeds.items()):
+            sc = (r0.get(sid) or {}).get("scores") or {}
+            if sc and sc["faithfulness"] <= 3:
+                items.append({"dataset": ds, "record_id": f"{sid}:faithfulness", "issue_id": s["issue_id"],
+                              "mode": "summary", "output": s["output"], "issue": d.issues[s["issue_id"]],
+                              "evaluator_flagged": True})
+        if ds == "sim":
+            flagged = sorted(k for k in seeds if k in r0 and r0[k]["scores"]["classification"] <= 3)
+            clean = sorted(k for k in seeds if k in r0 and min(r0[k]["scores"].values()) > 3)
+            rng = random.Random(EVAL_SEED)
+            pick = ([(k, True) for k in rng.sample(flagged, min(EVAL_SAMPLE, len(flagged)))]
+                    + [(k, False) for k in rng.sample(clean, min(EVAL_SAMPLE, len(clean)))])
+            rng.shuffle(pick)
+            for k, was_flagged in pick:
+                s = seeds[k]
+                items.append({"dataset": ds, "record_id": f"{k}:classification", "issue_id": s["issue_id"],
+                              "mode": "fields", "output": s["output"], "issue": d.issues[s["issue_id"]],
+                              "evaluator_flagged": was_flagged})
+    return items
+
+
+def run_eval(root=".", version="v1"):
+    queue = eval_queue(root, version)
+    path = lambda ds: Path(root) / f"data/{ds}/adjudications.jsonl"
+    done = {ds: _existing(path(ds), "evaluator_flag") for ds in ("sim", "k8s")}
+    todo = [q for q in queue if q["record_id"] not in done[q["dataset"]]]
+    try:
+        for n, q in enumerate(todo, 1):
+            _show(f"[{n}/{len(todo)} left]  {q['dataset']} {q['issue_id']}", q["issue"])
+            o = q["output"]
+            if q["mode"] == "summary":
+                print(f"AI SUMMARY: {o['summary']!r}")
+                ans = _ask("Does the summary say anything that is NOT in the issue, or get something wrong?",
+                           ["yes, something is wrong", "no, it's fine"])
+            else:
+                print(f"AI TRIAGE:  category={o['category']}  priority={o['priority']}  "
+                      f"area={o['product_area']}  needs_human={o['needs_human']}")
+                print(f"            summary={o['summary']!r}")
+                ans = _ask("Is anything CLEARLY wrong in category, priority, area or needs_human?",
+                           ["yes, something is wrong", "no, it's fine", "not sure"])
+            notes = input("why, in a few words (optional)\n> ").strip()
+            verdict = {"yes, something is wrong": "true_defect", "no, it's fine": "false_alarm"}.get(ans, "unsure")
+            _append(path(q["dataset"]), {"kind": "evaluator_flag", "record_id": q["record_id"],
+                                         "issue_id": q["issue_id"], "mode": q["mode"],
+                                         "evaluator_flagged": q["evaluator_flagged"], "verdict": verdict,
+                                         "reason": notes, "at": _now()})
+    except (Quit, KeyboardInterrupt, EOFError):
+        pass
+    left = sum(q["record_id"] not in _existing(path(q["dataset"]), "evaluator_flag") for q in queue)
+    print(f"\nevaluator review: {len(queue) - left}/{len(queue)} done")
     return 0 if left == 0 else 1

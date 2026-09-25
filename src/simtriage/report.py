@@ -346,6 +346,20 @@ def gate_adjudications(d):
             for g, v in out.items()} or None
 
 
+def evaluator_flag_review(d):
+    """Blind human review of seeds: how often a flagged seed was really wrong,
+    and how often an unflagged one was."""
+    out = {}
+    rows = [a for a in d.adjudications if a.get("kind") == "evaluator_flag" and a["verdict"] != "unsure"]
+    for mode in ("summary", "fields"):
+        for flagged in (True, False):
+            sel = [a for a in rows if a["mode"] == mode and a["evaluator_flagged"] is flagged]
+            if sel:
+                out[f"{mode}_{'flagged' if flagged else 'not_flagged'}_really_wrong"] = wilson(
+                    sum(a["verdict"] == "true_defect" for a in sel), len(sel))
+    return out or None
+
+
 def overall_label_free_mutation_recall(d):
     hits = [caught(m["output"], d.issues[m["issue_id"]], d.key[m["issue_id"]], d.tax)["label_free"]
             for m in d.mutants if m["applicable"]]
@@ -376,6 +390,7 @@ def build(d, split):
         "evaluator_stability": evaluator_stability(d) if d.evaluator else None,
         "key_disagreements": key_disagreements(d),
         "gate_adjudications": gate_adjudications(d),
+        "evaluator_flag_review": evaluator_flag_review(d),
     }
 
 
