@@ -1,162 +1,125 @@
 # Protocol (pre-registered)
 
-Committed before any triage output exists. If something changes later, it goes
-in "Deviations" at the bottom with the date and reason, and the report shows
-both versions of any affected number.
+This version replaces the single-dataset, hand-labeled design from the first
+commits (see "History" at the bottom). It was committed before any triage
+output existed for either dataset. Anything changed after this point goes in
+"Deviations" with the date and reason, and the report shows both versions of
+any affected number.
 
-## 1. Data
+## 1. Two customers, one eval system
 
-- Source: GitHub issues in `simstudioai/sim`, fetched 2026-09-25. Selection is
-  in `scripts/sample_issues.py`: filed on or after 2025-08-01, not by a bot or
-  core team member (50 or more commits), body of at least 150 characters, 100
-  issues stratified by maintainer label (bug 53, feature 22, unlabeled 25),
-  seed 20260925.
-- Split: 60 dev and 40 held-out test (`data/split.json`), stratified the same
-  way. Prompt iteration only ever looks at dev outputs. Test is run once per
-  frozen prompt version.
-- Ground truth: my labels (`data/labels.jsonl`) under LABELING_GUIDE.md.
-  Reliability: blind relabel of 20 issues at least 24h later, reported as
-  percent agreement and Cohen's kappa per field.
-- Secondary reference: Sim maintainers' own `bug` and `feature` labels, compared
-  with my category labels after labeling is complete.
+The same triage workflow design, gates, mutation engine and report are run for
+two "customers", each with its own taxonomy (`src/simtriage/schema.py`) and
+rubric (`prompts/<ds>/rubric.md`):
+
+| | Sim (`sim`) | Kubernetes (`k8s`) |
+|---|---|---|
+| Source | simstudioai/sim issues, snapshot 2026-09-25 | kubernetes/kubernetes issues with a priority label, created on or after 2025-08-01, snapshot 2026-09-25 |
+| Issues | 307 (232 with a key, 75 untriaged queue) | 229 |
+| Split | dev 139 / test 93, stratified by key | dev 138 / test 91, stratified by priority |
+| Answer key | `category_coarse` (bug or feature): the reporter's template choice | `priority`: set by a triager; `category` (kind) and `product_area` (sig): mostly reporter-set |
+
+**Provenance was checked, not assumed.**
+- In Sim's snapshot, only 1 of 311 candidate issues had a label applied by
+  anyone other than the reporter. Sim's `bug` and `feature` labels come from
+  the issue templates. The label-event history is committed.
+- For Kubernetes, an issue is included only if the `/priority` command that
+  set its label came from someone other than the reporter. 72 reporter-set and
+  18 untraceable issues were excluded. The setter for each issue is in
+  `data/k8s/priority_provenance.jsonl`.
+
+**Leak removal.** Text that a template inserts automatically (Sim's `[BUG]` and
+`[REQUEST]` prefixes and template headings; Kubernetes' form headings and
+placeholders) and prow commands (`/kind`, `/sig`, ...) are stripped, because
+they give away the answer. Anything a person typed is kept. The build scripts
+list the exact strings.
 
 ## 2. The workflow under test
 
 - Built in the Sim canvas on a self-hosted install (image digests in
-  SIM_VERSION.txt), deployed as an API, and called only through that API.
-- Input: `title`, `body`. Output: the `Triage` schema in `src/simtriage/schema.py`.
-- Model: `claude-haiku-4-5` at temperature 0 if the block exposes it. Structured
-  output is used if Sim's Agent block supports a response schema, because a
-  customer would use it. Whether Sim actually enforces it is itself measured by
-  the schema gate.
+  SIM_VERSION.txt), one triage workflow per customer, deployed as an API, and
+  called only through that API.
+- Model `claude-haiku-4-5` with native structured output, and temperature set
+  explicitly to 0 (Sim's default when the field is empty is 0.7).
 - Every issue runs 3 times per prompt version. Run-to-run disagreement is
-  reported as a stability metric.
+  reported as stability.
 
 ## 3. Deterministic gates (no model calls)
 
-Label-free gates, which work in production where there are no labels:
-
-| gate | fails when |
-|---|---|
-| `schema` | invalid JSON, a missing or extra field, a value outside the allowed set, a wrong type |
-| `consistency` | any of R1 to R7 is violated |
-| `summary_length` | the summary is empty, multi-line, or over 160 characters |
-| `summary_numbers` | a number or version token in the summary doesn't appear in the issue title or body |
-| `summary_urls` | a URL or domain in the summary doesn't appear in the issue |
-| `summary_handles` | an email, `@handle` or `#123` reference in the summary doesn't appear in the issue |
-| `summary_entities` | a capitalized word that isn't sentence-initial and isn't on a fixed stoplist doesn't appear in the issue (case-insensitive) |
-
-Label-dependent gates (these need ground truth, so they're regression-suite only):
-`category_match`, `priority_match`, `product_area_match`, `needs_human_match`.
-
-Results for the two families are always reported separately.
+Label-free: `schema`, `consistency` (the customer's rules), `summary_length`,
+`summary_numbers`, `summary_urls`, `summary_handles`, `summary_entities`.
+Label-dependent: one `<field>_match` gate per field that has a key. A key may
+list several acceptable values, and any of them counts as a match. Sim's
+coarse key compares the model's category through a fixed map (bug, security →
+bug; feature_request, integration_request → feature; anything else → other).
 
 ## 4. Metrics
 
-- Per field: accuracy, with macro-F1 for category and product_area. For
-  priority, also within-one-level accuracy. For needs_human, precision and
-  recall on `true`.
-- Gate failure rate for each gate on real outputs.
-- Telemetry from Sim's logs API: p50 and p95 end-to-end and per-block latency,
-  execution failure rate, tokens, and cost per 100 issues.
-- Every proportion gets a 95% Wilson interval. With n=40 on test, differences
-  inside the intervals are reported as "no measurable difference".
+- For each field with a key: accuracy with a 95% Wilson interval, next to a
+  **majority baseline** (always answer the most common dev-split value,
+  scored on the reported split). For priority: within-one-level accuracy and a
+  confusion table.
+- Gate failure rates on real outputs, including Sim's untriaged queue.
+- Telemetry from Sim's logs API: p50 and p95 latency end to end and per
+  block, execution failure rate, cost per 100 runs.
+- Sim only: accuracy for issues filed before and after 2025-08-01, as a check
+  for training-data contamination.
 
 ## 5. Mutation testing
 
-Seeds are v1 outputs (run 1 of 3) that pass every label-free gate and match my
-labels on all four fields. Every applicable operator is applied once per seed
-with a seeded RNG (seed 11), so the mutant set is deterministic and committed.
-
-| operator | what it does |
-|---|---|
-| `category_random` | category set to a uniformly random other category |
-| `category_plausible` | category swapped to its declared confusable: bug↔question, bug↔security, feature_request↔integration_request, docs↔question, invalid→question |
-| `product_area_plausible` | swapped to its declared neighbor: self_hosting↔dev_setup, execution_engine↔workflow_editor, integrations↔api_deployment, agents_models↔integrations, copilot↔agents_models, mcp↔integrations, auth_accounts↔self_hosting, logs_observability↔execution_engine |
-| `priority_off_by_one` | one level up or down (seeded), staying within range |
-| `needs_human_flip` | needs_human negated |
-| `summary_invented_number` | a version or number that isn't in the issue inserted into the summary |
-| `summary_invented_entity` | a named tool or service in the summary replaced with one not in the issue |
-| `summary_swapped` | the summary replaced with the summary of a different issue from the same category |
-| `summary_negated` | the summary's main verb negated (for example "fails" becomes "works") |
-| `field_missing` | one field removed (seeded) |
-| `field_extra` | a `confidence` field added |
-| `enum_case` | category with its first letter capitalized, such as `Bug` |
-
-Each mutant is designed to be wrong. If an operator produces a mutant that is
-still correct (say a flipped needs_human that is defensible for that issue),
-it's counted and reported, not silently dropped.
+Seeds are v1 outputs (repeat 0) that pass every label-free gate and agree with
+every keyed field. Fields without a key are unverified in a seed, and the
+report says which fields had a key. There are 12 operators
+(`src/simtriage/mutations.py`) with seed 11. Confusable categories, neighboring
+areas and the invented-entity pools are defined per customer, so the injected
+defects are plausible for that domain.
 
 ## 6. Sim Evaluator comparison
 
-- A second Sim workflow: Start (`issue`, `triage_output`) → Evaluator block,
-  deployed as an API. It is the same rubric the labeler had:
-  LABELING_GUIDE.md's definitions go into the Evaluator's system prompt,
-  because a customer would give their judge the rubric.
-- Metrics, each on a 1 to 5 scale:
-  - `classification`: are category, priority, product_area and needs_human
-    correct for this issue under the rubric?
-  - `faithfulness`: does the summary state only what the issue says, with no
-    invented numbers, versions, names or claims?
-  - `consistency`: are the fields consistent with each other and the rubric's
-    rules?
-- Model: the block default (`claude-sonnet-4-6`), recorded exactly as the logs
-  report it. Temperature 0 if exposed. 3 repeats per input.
-- **Primary flag rule:** an input is flagged if any metric scores 3 or lower
-  in at least 2 of the 3 repeats.
-- Secondary: a full sweep over cutoffs 1 to 4, reporting detection rate and
-  false-flag rate at each. All cutoffs are shown, none selected after the fact.
-- Inputs: every clean seed (for the false-flag rate), every mutant (for recall
-  by operator), and every real v1 output that disagrees with my labels
-  (natural errors).
-- It is compared side by side with label-free gates, label-dependent gates, and
-  their union.
+- One Evaluator workflow. The customer's rubric is included in the content it
+  scores, so the judge has the same rules as the triage agent.
+- Metrics `classification`, `faithfulness` and `consistency`, each on a 1 to 5
+  scale (`prompts/evaluator_metrics.json`).
+- The model is the block's default, recorded as the logs report it,
+  temperature 0, 3 repeats.
+- **Primary flag rule:** flagged if any metric scores 3 or lower in at least
+  2 of 3 repeats. A sweep over cutoffs 1 to 4 is also reported, with every
+  cutoff shown.
+- Inputs: clean seeds (false-flag rate), mutants (recall by operator), and
+  real outputs that disagree with the key (natural errors).
 
-## 6b. Adjudication (false alarms need a human)
+## 7. Adjudication (human, after outputs)
 
-Seeds pass every label-free gate by construction, so the label-free gates'
-false-alarm rate can't be measured on seeds. It is measured on real outputs:
-every label-free gate failure on a real v1 output is reviewed by hand and
-marked `true_defect` or `false_alarm`, with a one-line reason, in
-`data/adjudications.jsonl`. The same applies to every Evaluator flag on a
-clean seed: a seed passes the deterministic checks but could still contain a
-defect they can't see, so an Evaluator flag there may be a real catch. False-
-alarm rates are reported only from adjudicated records. Adjudication is done
-by the labeler, with the model output visible, after labeling is complete.
+- Sim: every disagreement between the model and the reporter's bug/feature
+  choice is settled by the author (model right, reporter right, or neither),
+  alone and with no AI review, in `data/sim/adjudications.jsonl`. The report
+  gives Sim metrics under the `original` key (primary) and the `adjudicated`
+  key, and reports how often the reporter's template choice was wrong.
+- Both datasets: every label-free gate failure on a real output and every
+  Evaluator flag on a clean seed is marked `true_defect` or `false_alarm`.
+  False-alarm rates come only from adjudicated records.
 
-## 7. Improvement loop
+## 8. Improvement loop
 
-v1 prompt, then a dev run. From dev failures only, write the v2 prompt, then run
-dev and test. Test is reported for v1 and v2. Each real failure found becomes a
-pinned pytest regression case. Maximum 2 iterations (v2, v3) to limit
-overfitting to dev.
-
-## 8. Label corrections
-
-If a model output reveals that my label was wrong, the correction goes in
-`data/label_corrections.jsonl` with a reason. The report gives metrics under
-both the original and the corrected labels. Labels are never edited in place.
+v1, then dev run and error analysis on dev only, then v2, then dev and test.
+Test is reported for v1 and v2. At most two iterations. Each real failure found
+becomes a pinned pytest case.
 
 ## 9. Reproducibility
 
-All model and workflow outputs are recorded in `runs/`. `simtriage report`
-rebuilds every number from committed files, with no network access and no
-secrets. CI runs the report and the test suite offline.
+Raw snapshots, build scripts, prompts, all outputs and the Evaluator scores are
+committed. `simtriage report` rebuilds every number offline with no secrets,
+and CI runs it.
+
+## History
+
+- 2026-09-25 (commits 71b73e6..c7122a0): the first design had the author hand-
+  label 100 Sim issues. It was abandoned after 2 labels. Labeling technical
+  issues from scratch was slow for one person. AI review of the labels was
+  rejected because Claude is also the model under test. That made the case for
+  existing human answer keys, which led to checking label provenance and
+  finding that Sim's labels are reporter-set.
 
 ## Deviations
 
-- 2026-09-25, before any model output: added section 6b (adjudication).
-  Measuring false alarms on seeds would have been circular.
-- 2026-09-25, during labeling, before any model output on sampled issues:
-  sim-1782 (test split) was labeled jointly with Claude as a worked example
-  while the labeler learned the guide. It is excluded from every metric
-  (`data/excluded.json`), so test has n=39 and the total is n=99. The labeler
-  labels all other issues alone.
-- 2026-09-25, during labeling: at the labeler's request, Claude reviews each
-  label after it's saved. The labeler's saved answers (`data/labels.jsonl`)
-  stay as they are and are the **primary** ground truth. Any field changed
-  after review goes to `data/label_review.jsonl` with the original, the final
-  value and the reason. Every metric is reported under both `raw` and
-  `reviewed` labels, along with the number of changes. The reviewed labels
-  carry Claude's influence, and Claude is also the model under test, so they're
-  a sensitivity analysis only.
+(none)

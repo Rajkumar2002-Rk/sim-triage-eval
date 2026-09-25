@@ -19,7 +19,7 @@ LABEL_FREE = ("schema", "consistency", "summary_length", "summary_numbers",
               "summary_urls", "summary_handles", "summary_entities")
 LABEL_DEPENDENT = ("category_match", "priority_match", "product_area_match",
                    "needs_human_match")
-LABEL_FIELDS = ("category", "priority", "product_area", "needs_human")
+LABEL_FIELDS = schema.FIELDS
 
 # Capitalized words that may appear in a summary without appearing in the
 # issue. Fixed before any model output was seen (see PROTOCOL.md section 3).
@@ -85,11 +85,11 @@ def _missing(found, haystack):
     return sorted({t for t in found if t.lower() not in hay})
 
 
-def gate_schema(obj, err):
+def gate_schema(obj, err, tax):
     if obj is None:
         return GateResult("schema", FAIL, err)
     try:
-        schema.Triage.model_validate(obj)
+        tax.model.model_validate(obj)
     except ValidationError as e:
         problems = "; ".join(f"{'.'.join(map(str, x['loc'])) or '(root)'}: {x['type']}"
                              for x in e.errors())
@@ -97,18 +97,10 @@ def gate_schema(obj, err):
     return GateResult("schema", PASS)
 
 
-def _fields_usable(obj):
-    return (obj is not None
-            and obj.get("category") in schema.CATEGORIES
-            and obj.get("priority") in schema.PRIORITIES
-            and obj.get("product_area") in schema.PRODUCT_AREAS
-            and isinstance(obj.get("needs_human"), bool))
-
-
-def gate_consistency(obj):
-    if not _fields_usable(obj):
+def gate_consistency(obj, tax):
+    if not tax.usable(obj):
         return GateResult("consistency", SKIP, "fields missing or invalid")
-    broken = schema.rule_violations(obj)
+    broken = tax.rule_violations(obj)
     return GateResult("consistency", FAIL if broken else PASS, ",".join(broken))
 
 
@@ -187,12 +179,12 @@ def gate_summary_entities(obj, source):
     return GateResult("summary_entities", FAIL if bad else PASS, ",".join(bad))
 
 
-def label_free(raw, issue):
+def label_free(raw, issue, tax):
     obj, err = parse(raw)
     source = f"{issue['title']}\n{issue['body']}"
     return Verdict([
-        gate_schema(obj, err),
-        gate_consistency(obj),
+        gate_schema(obj, err, tax),
+        gate_consistency(obj, tax),
         gate_summary_length(obj),
         gate_summary_numbers(obj, source),
         gate_summary_urls(obj, source),
@@ -201,22 +193,35 @@ def label_free(raw, issue):
     ])
 
 
-def label_dependent(raw, label):
+def matches(field, pred, gold, tax):
+    """Does a predicted value agree with the answer key? `field` is the key's
+    field. Gold may be one value or a list of acceptable values (e.g. a
+    Kubernetes issue owned by two SIGs)."""
+    if field == "category_coarse":
+        pred = tax.grade_category(pred)
+    return pred in gold if isinstance(gold, list) else pred == gold
+
+
+def label_dependent(raw, gold, tax):
+    """Only fields present in the answer key are graded."""
     obj, _ = parse(raw)
     results = []
     for f in LABEL_FIELDS:
+        kf = schema.key_field(f, gold)
+        if kf is None:
+            continue
         gate = f"{f}_match"
         if obj is None or f not in obj:
             results.append(GateResult(gate, SKIP, "field missing"))
-        elif obj[f] == label[f]:
+        elif matches(kf, obj[f], gold[kf], tax):
             results.append(GateResult(gate, PASS))
         else:
-            results.append(GateResult(gate, FAIL, f"got {obj[f]!r}, label {label[f]!r}"))
+            results.append(GateResult(gate, FAIL, f"got {obj[f]!r}, key {kf}={gold[kf]!r}"))
     return Verdict(results)
 
 
-def check(raw, issue, label=None):
-    v = label_free(raw, issue)
-    if label is not None:
-        v.results += label_dependent(raw, label).results
+def check(raw, issue, tax, gold=None):
+    v = label_free(raw, issue, tax)
+    if gold is not None:
+        v.results += label_dependent(raw, gold, tax).results
     return v

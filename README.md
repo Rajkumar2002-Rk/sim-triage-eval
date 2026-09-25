@@ -1,3 +1,3 @@
 # sim-triage-eval
 
-Work in progress. A deterministic regression suite for an issue-triage workflow running on a self-hosted [Sim](https://github.com/simstudioai/sim), measured against Sim's own Evaluator block. See PROTOCOL.md.
+Work in progress. One deterministic eval system for issue-triage workflows running on a self-hosted [Sim](https://github.com/simstudioai/sim), applied to two customers (Sim's own issue queue and Kubernetes) and measured against Sim's own Evaluator block. See PROTOCOL.md.

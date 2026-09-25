@@ -34,11 +34,17 @@ def build_inputs(d):
     return rows
 
 
-def score_one(client, workflow_id, row, issue, repeat, retries=2):
+def load_rubric(dataset):
+    """The customer's rubric as the judge sees it: same rules the triage agent got."""
+    return Path(f"prompts/{dataset}/evaluator_system.md").read_text()
+
+
+def score_one(client, workflow_id, row, issue, repeat, rubric, retries=2):
     for attempt in range(retries + 1):
         try:
             status, body, client_ms = client.execute(workflow_id, {
-                "issue": format_issue(issue), "triage_output": format_output(row["output"])})
+                "rubric": rubric, "issue": format_issue(issue),
+                "triage_output": format_output(row["output"])})
             break
         except httpx.TransportError as e:
             err = f"{type(e).__name__}: {e}"
@@ -63,13 +69,15 @@ def score_one(client, workflow_id, row, issue, repeat, retries=2):
 
 
 def run(client, workflow_id, d, repeats=3, concurrency=4, out_path=None, limit=None):
-    out_path = out_path or f"runs/{d.version}/evaluator.jsonl"
+    out_path = out_path or d.run_dir / "evaluator.jsonl"
     rows = build_inputs(d)[:limit] if limit else build_inputs(d)
     skip = done_keys_eval(out_path)
     jobs = [(r, k) for r in rows for k in range(repeats) if (r["input_id"], k) not in skip]
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    rubric = load_rubric(d.dataset)
     with open(out_path, "a") as f, ThreadPoolExecutor(concurrency) as pool:
-        for rec in pool.map(lambda j: score_one(client, workflow_id, j[0], d.issues[j[0]["issue_id"]], j[1]), jobs):
+        for rec in pool.map(lambda j: score_one(client, workflow_id, j[0], d.issues[j[0]["issue_id"]],
+                                                j[1], rubric), jobs):
             f.write(json.dumps(rec) + "\n")
             f.flush()
             print(f"{rec['input_id']} r{rec['repeat']} {'ok' if rec['ok'] else 'FAIL'} {rec.get('scores')}")

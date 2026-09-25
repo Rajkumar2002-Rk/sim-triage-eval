@@ -18,20 +18,12 @@ class ContaminationError(Exception):
     pass
 
 
-def guard_labels_complete(issue_ids, sample_path="data/issues.jsonl",
-                          labels_path="data/labels.jsonl"):
-    """Refuse to produce model output for sampled issues before they're all labeled."""
-    sample = {json.loads(l)["id"] for l in open(sample_path)}
-    touched = set(issue_ids) & sample
-    if not touched:
-        return
-    labeled = ({json.loads(l)["id"] for l in open(labels_path)}
-               if Path(labels_path).exists() else set())
-    missing = sample - labeled
-    if missing:
-        raise ContaminationError(
-            f"{len(missing)} of {len(sample)} sampled issues are unlabeled; model output "
-            f"for sampled issues is blocked until labeling is complete")
+def guard_key_frozen(dataset, root="."):
+    """Outputs may only be produced once the dataset's answer key exists, so the
+    key can't be shaped by what the model said."""
+    if not (Path(root) / "data" / dataset / "answer_key.jsonl").exists():
+        raise ContaminationError(f"data/{dataset}/answer_key.jsonl missing; build the "
+                                 f"answer key before producing any model output")
 
 
 def done_keys(out_path):
@@ -82,8 +74,9 @@ def run_one(client, workflow_id, issue, repeat, version, retries=2):
     return rec
 
 
-def run(client, workflow_id, issues, version, out_path, repeats=3, concurrency=4):
-    guard_labels_complete([i["id"] for i in issues])
+def run(client, workflow_id, issues, version, out_path, repeats=3, concurrency=4, dataset=None):
+    if dataset is not None:
+        guard_key_frozen(dataset)
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     skip = done_keys(out_path)
     jobs = [(i, r) for i in issues for r in range(repeats) if (i["id"], r) not in skip]

@@ -1,19 +1,22 @@
-# Building the two Sim workflows
+# Building the Sim workflows
 
-Build these in the Sim canvas, as a customer would. **Do this after labeling
-is complete.** Seeing model triage output first, even on practice issues,
-could anchor your labels.
+Build these in the Sim canvas, as a customer would. There are three: one
+triage workflow per customer (`sim-triage`, `k8s-triage`) and one shared
+`triage-evaluator`. Each answer key is built from existing human decisions and
+committed before any output exists (the runner refuses to run otherwise).
 
-## 1. `issue-triage`
+## 1. `sim-triage` and `k8s-triage`
 
-1. Create a workflow named `issue-triage`.
+Build the same shape twice. Only the prompt and the response format differ.
+
+1. Create a workflow named `sim-triage` (then `k8s-triage`).
 2. **Start** block, two inputs, both type String and **no default value**
    (a default would mask missing input): `title` and `body`.
 3. **Agent** block (the plain "Agent", not "Claude Managed Agents"), connected
    from Start:
    - Model: `claude-haiku-4-5`
    - API key: `{{ANTHROPIC_API_KEY}}`
-   - System prompt: paste all of `prompts/triage_v1.md`
+   - System prompt: paste all of `prompts/<sim|k8s>/triage_v1.md`
    - User message:
      ```
      TITLE: <start.title>
@@ -22,28 +25,33 @@ could anchor your labels.
      <start.body>
      ```
    - Temperature: **0**. Left empty, Sim uses 0.7.
-   - Response format: paste `prompts/response_format.json`
+   - Response format: paste `prompts/<sim|k8s>/response_format.json`
    - No tools, memory off.
-4. Click Run in the editor with any practice issue's text, then Deploy.
+4. Click Run in the editor with the text of any **dev** issue (never a test issue), then Deploy.
 5. The workflow ID is the last part of the editor URL. Then:
    ```bash
-   export SIM_TRIAGE_WORKFLOW_ID=paste-id
+   export SIM_SIM_WORKFLOW_ID=paste-id    # and SIM_K8S_WORKFLOW_ID for k8s-triage
    ```
-6. Smoke test on the 8 out-of-sample practice issues, one repeat each:
+6. Smoke test on 3 **dev** issues, one repeat, into a throwaway version tag
+   (never smoke-test on test issues; seeing test outputs while tuning leaks them
+   into the prompt):
    ```bash
-   uv run simtriage run --issues data/practice_issues.jsonl --split all --version practice --repeats 1
+   uv run simtriage run --dataset sim --version smoke --split dev --limit 3 --repeats 1
    ```
 
 ## 2. `triage-evaluator`
 
 1. Create a workflow named `triage-evaluator`.
-2. **Start** block, two String inputs with no defaults: `issue` and
-   `triage_output`.
+2. **Start** block, three String inputs with no defaults: `rubric`, `issue`
+   and `triage_output`.
 3. **Evaluator** block, connected from Start:
    - Metrics: the three in `prompts/evaluator_metrics.json` (name,
      description, range 1 to 5), entered exactly as written.
    - Content:
      ```
+     RUBRIC:
+     <start.rubric>
+
      ISSUE:
      <start.issue>
 
@@ -51,26 +59,27 @@ could anchor your labels.
      <start.triage_output>
      ```
    - Model: leave the default and record what it is.
-   - Advanced: temperature **0**, system prompt: paste all of
-     `prompts/evaluator_system.md`.
+   - Advanced: temperature **0**. System prompt: "Score the triage output
+     against the RUBRIC given in the content. Judge only against that rubric."
    - API key, if it asks: `{{ANTHROPIC_API_KEY}}`.
 4. Deploy, then:
    ```bash
    export SIM_EVAL_WORKFLOW_ID=paste-id
    ```
 
-## 3. Export both definitions
+## 3. Export all three definitions
 
 From each workflow's menu, export it and save it to `sim_workflows/`. Check
 that the files contain `{{ANTHROPIC_API_KEY}}` and not a real key before
 committing.
 
-## Order of the real runs (after labeling)
+## Order of the real runs (per dataset: sim, then k8s)
 
 ```bash
-uv run simtriage run --version v1 --split all        # 100 issues x 3 repeats
-uv run simtriage mutate --version v1
-uv run simtriage evaluate --version v1 --limit 5     # dry run, check scores parse
-uv run simtriage evaluate --version v1               # full run
-uv run simtriage report --version v1 --split test --json report/v1-test.json
+uv run simtriage run --dataset sim --version v1 --split all     # keyed issues x 3 repeats
+uv run simtriage run --dataset sim --version v1 --split queue   # untriaged queue
+uv run simtriage mutate --dataset sim --version v1
+uv run simtriage evaluate --dataset sim --version v1 --limit 5  # dry run, check scores parse
+uv run simtriage evaluate --dataset sim --version v1
+uv run simtriage report --dataset sim --version v1 --split test --json report/sim-v1-test.json
 ```

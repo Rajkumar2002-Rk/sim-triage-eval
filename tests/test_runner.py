@@ -76,20 +76,15 @@ def test_transport_errors_are_retried_and_recorded():
     assert rec["http_status"] is None and len(rec["transport_errors"]) == 3 and calls["n"] == 3
 
 
-def test_guard_blocks_sampled_issues_until_labels_complete(tmp_path):
-    sample = tmp_path / "issues.jsonl"
-    sample.write_text("\n".join(json.dumps({"id": f"sim-{i}"}) for i in (1, 2)) + "\n")
-    labels = tmp_path / "labels.jsonl"
-    labels.write_text(json.dumps({"id": "sim-1"}) + "\n")
+def test_guard_requires_answer_key_before_outputs(tmp_path):
     with pytest.raises(runner.ContaminationError):
-        runner.guard_labels_complete(["sim-2"], sample, labels)
-    runner.guard_labels_complete(["practice-658"], sample, labels)   # out-of-sample is fine
-    labels.write_text("".join(json.dumps({"id": f"sim-{i}"}) + "\n" for i in (1, 2)))
-    runner.guard_labels_complete(["sim-2"], sample, labels)
+        runner.guard_key_frozen("sim", tmp_path)
+    (tmp_path / "data/sim").mkdir(parents=True)
+    (tmp_path / "data/sim/answer_key.jsonl").write_text("")
+    runner.guard_key_frozen("sim", tmp_path)
 
 
 def test_run_is_resumable(tmp_path, monkeypatch):
-    monkeypatch.setattr(runner, "guard_labels_complete", lambda ids: None)
     transport, _ = fake_sim(log_running_polls=0)
     c = SimClient("http://sim", "k", transport=transport)
     issues = [{"id": "x-1", "title": "t", "body": "b"}]

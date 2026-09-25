@@ -3,6 +3,7 @@ import random
 import pytest
 
 from simtriage import gates, mutations, schema
+from simtriage.schema import SIM
 
 ISSUE = {"id": "sim-1", "title": "[BUG] Docker migrations fail",
          "body": "On Ubuntu 22.04 the Postgres migration fails with drizzle-orm 0.30.1 and exits 1."}
@@ -16,7 +17,7 @@ ISSUES = {"sim-1": ISSUE, "sim-2": OTHER}
 
 
 def run(op, out=OUT, issue=ISSUE, seed=0):
-    return getattr(mutations, op)(dict(out), issue, random.Random(seed), SEEDS)
+    return getattr(mutations, op)(dict(out), issue, random.Random(seed), SEEDS, SIM)
 
 
 def changed_fields(a, b):
@@ -42,24 +43,24 @@ def test_category_plausible_stays_in_confusable_set():
 
 
 def test_priority_off_by_one_is_one_level_and_in_range():
-    for p in schema.PRIORITIES:
+    for p in SIM.priorities:
         for seed in range(10):
             m = run("priority_off_by_one", out={**OUT, "priority": p}, seed=seed)
-            assert abs(schema.PRIORITIES.index(m["priority"]) - schema.PRIORITIES.index(p)) == 1
+            assert abs(SIM.rank(m["priority"]) - SIM.rank(p)) == 1
 
 
 def test_invented_number_is_new_and_caught_by_number_gate():
     for seed in range(20):
         m = run("summary_invented_number", seed=seed)
         assert len(m["summary"]) <= schema.SUMMARY_MAX_CHARS
-        assert gates.label_free(m, ISSUE).by_gate()["summary_numbers"].status == gates.FAIL
+        assert gates.label_free(m, ISSUE, SIM).by_gate()["summary_numbers"].status == gates.FAIL
 
 
 def test_invented_number_respects_length_limit_on_long_summary():
     long = {**OUT, "summary": ("Postgres migration fails on Ubuntu " * 10)[:158] + "."}
     m = run("summary_invented_number", out=long)
     assert len(m["summary"]) <= schema.SUMMARY_MAX_CHARS
-    assert gates.label_free(m, ISSUE).by_gate()["summary_length"].status == gates.PASS
+    assert gates.label_free(m, ISSUE, SIM).by_gate()["summary_length"].status == gates.PASS
 
 
 def test_invented_entity_replaces_a_sourced_name_with_an_unsourced_one():
@@ -85,12 +86,12 @@ def test_swapped_summary_comes_from_another_issue():
 def test_structural_mutants_fail_schema():
     for op in ("field_missing", "field_extra", "enum_case"):
         m = run(op)
-        assert gates.label_free(m, ISSUE).by_gate()["schema"].status == gates.FAIL, op
+        assert gates.label_free(m, ISSUE, SIM).by_gate()["schema"].status == gates.FAIL, op
 
 
 def test_generate_is_deterministic_and_complete():
-    a = mutations.generate(SEEDS, ISSUES)
-    b = mutations.generate(SEEDS, ISSUES)
+    a = mutations.generate(SEEDS, ISSUES, SIM)
+    b = mutations.generate(SEEDS, ISSUES, SIM)
     assert a == b
     assert len(a) == len(SEEDS) * len(mutations.OPERATORS)
     assert {m["operator"] for m in a} == set(mutations.OPERATORS)

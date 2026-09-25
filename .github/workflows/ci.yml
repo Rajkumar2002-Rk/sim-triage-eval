@@ -18,11 +18,13 @@ jobs:
       - name: Offline report (no network, no secrets)
         # Gates on the frozen final version once recorded runs are committed.
         run: |
-          if [ -f runs/final/VERSION ]; then
-            v=$(cat runs/final/VERSION)
-            uv run simtriage report --version "$v" --split test --json "report/$v-test.json"
-            uv run simtriage report --version "$v" --split all \
-              --metric label_free_mutation_recall --fail-under "$(cat runs/final/FAIL_UNDER)"
-          else
-            echo "no recorded runs committed yet; skipping report gate"
-          fi
+          for ds in sim k8s; do
+            if [ -f "runs/$ds/FINAL" ]; then
+              v=$(cat "runs/$ds/FINAL")
+              uv run simtriage report --dataset "$ds" --version "$v" --split test --json "report/$ds-$v-test.json"
+              uv run simtriage report --dataset "$ds" --version "$v" --split all \
+                --metric label_free_mutation_recall --fail-under "$(cat "runs/$ds/FAIL_UNDER")"
+            else
+              echo "$ds: no recorded runs committed yet; skipping report gate"
+            fi
+          done

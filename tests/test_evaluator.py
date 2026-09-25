@@ -11,7 +11,7 @@ def fake_eval(scores):
     def handler(request):
         if request.method == "POST":
             body = json.loads(request.content)
-            assert set(body["input"]) == {"issue", "triage_output"}
+            assert set(body["input"]) == {"rubric", "issue", "triage_output"}
             return httpx.Response(200, json={"data": {"runId": "e1", "status": "completed",
                 "output": {**scores, "model": "claude-sonnet-4-6", "cost": {"total": 0.01}}}})
         return httpx.Response(200, json={"data": {"status": "completed", "totalDurationMs": 900}})
@@ -19,9 +19,9 @@ def fake_eval(scores):
 
 
 def test_inputs_cover_seeds_mutants_and_natural_errors(project):  # noqa: F811
-    d = report.Data(".", "v1")
+    d = report.Data(".", "sim", "v1")
     report.write_mutants(d)
-    d = report.Data(".", "v1")
+    d = report.Data(".", "sim", "v1")
     rows = evaluator.build_inputs(d)
     kinds = [r["kind"] for r in rows]
     assert kinds.count("seed") == 3 and kinds.count("natural") == 1
@@ -30,18 +30,18 @@ def test_inputs_cover_seeds_mutants_and_natural_errors(project):  # noqa: F811
 
 
 def test_score_one_extracts_metric_scores(project):  # noqa: F811
-    d = report.Data(".", "v1")
+    d = report.Data(".", "sim", "v1")
     row = {"input_id": "seed:sim-1", "kind": "seed", "issue_id": "sim-1", "operator": None,
            "output": {"category": "bug"}}
     rec = evaluator.score_one(fake_eval({"classification": 5, "faithfulness": 4, "consistency": 5}),
-                              "wf", row, d.issues["sim-1"], 0)
+                              "wf", row, d.issues["sim-1"], 0, "RUBRIC")
     assert rec["ok"] and rec["scores"] == {"classification": 5, "faithfulness": 4, "consistency": 5}
-    bad = evaluator.score_one(fake_eval({"classification": 5}), "wf", row, d.issues["sim-1"], 0)
+    bad = evaluator.score_one(fake_eval({"classification": 5}), "wf", row, d.issues["sim-1"], 0, "RUBRIC")
     assert not bad["ok"]
 
 
 def test_flag_rule_is_two_of_three_at_cutoff_three(project):  # noqa: F811
-    d = report.Data(".", "v1")
+    d = report.Data(".", "sim", "v1")
     mk = lambda i, rep, c: {"input_id": i, "repeat": rep, "ok": True,
                             "scores": {"classification": c, "faithfulness": 5, "consistency": 5}}
     d.evaluator = [mk("a", 0, 3), mk("a", 1, 5), mk("a", 2, 2),     # 2 of 3 at or below 3 -> flagged

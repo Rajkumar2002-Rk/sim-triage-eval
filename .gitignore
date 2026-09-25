@@ -6,3 +6,5 @@ __pycache__/
 *.tmp
 .env
 .env.*
+runs/*/smoke/
+report/

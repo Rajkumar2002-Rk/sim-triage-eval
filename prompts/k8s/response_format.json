@@ -1,0 +1,76 @@
+{
+  "name": "triage",
+  "strict": true,
+  "schema": {
+    "additionalProperties": false,
+    "properties": {
+      "category": {
+        "enum": [
+          "bug",
+          "regression",
+          "failing_test",
+          "flake",
+          "feature",
+          "cleanup",
+          "documentation",
+          "support"
+        ],
+        "type": "string"
+      },
+      "priority": {
+        "enum": [
+          "backlog",
+          "important-longterm",
+          "important-soon",
+          "critical-urgent"
+        ],
+        "type": "string"
+      },
+      "product_area": {
+        "enum": [
+          "api-machinery",
+          "apps",
+          "architecture",
+          "auth",
+          "autoscaling",
+          "cli",
+          "cloud-provider",
+          "cluster-lifecycle",
+          "contributor-experience",
+          "docs",
+          "etcd",
+          "instrumentation",
+          "k8s-infra",
+          "multicluster",
+          "network",
+          "node",
+          "release",
+          "scalability",
+          "scheduling",
+          "security",
+          "storage",
+          "testing",
+          "ui",
+          "windows"
+        ],
+        "type": "string"
+      },
+      "needs_human": {
+        "type": "boolean"
+      },
+      "summary": {
+        "maxLength": 160,
+        "minLength": 1,
+        "type": "string"
+      }
+    },
+    "required": [
+      "category",
+      "priority",
+      "product_area",
+      "needs_human",
+      "summary"
+    ],
+    "type": "object"
+  }
+}

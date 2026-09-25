@@ -27,6 +27,26 @@ listed separately, and each gets a pinned regression test.
   have been a false failure. Caught by the gate's own unit test. It now checks
   the number.
 
+- 2026-09-25, design: Sim's `bug`/`feature` labels looked like maintainer triage
+  and were about to be used as the answer key. Label-event history showed that
+  Sim's issue templates apply them automatically: 1 of 311 was set by anyone
+  but the reporter. Kubernetes `kind/*` labels are mostly the same (38 of 40
+  sampled came from the reporter), while `priority/*` is set by triagers.
+- 2026-09-25, leak: template headings ("Describe the bug", "What happened?",
+  "Which tests are flaking?") and prow commands (`/kind bug`) reveal the answer
+  key. The first stripping pass missed variants: trailing colons, curly
+  apostrophes, headings merged with text on one line, and bulleted commands. A
+  later fix to normalize trailing colons re-introduced 62 lines, because the
+  template list wasn't normalized the same way. Each pass was checked with a
+  leak count; the final count is 0 for both datasets.
+- 2026-09-25, grading: Sim's coarse key value `bug` has the same name as the
+  fine-grained category `bug`, so inferring the key's granularity from its
+  values was ambiguous. Coarse keys now live in their own field,
+  `category_coarse`.
+- 2026-09-25, baseline: `sig/node` owns 249 of 325 Kubernetes issues, so area
+  accuracy without a baseline would be misleading. Every accuracy is reported
+  next to a dev-chosen majority baseline.
+
 ## Found against real outputs
 
 (none yet)

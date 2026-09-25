@@ -1,13 +1,24 @@
-"""Build every reported number from committed files. No network, no secrets."""
+"""Build every reported number from committed files. No network, no secrets.
+
+Layout per dataset (customer) `ds`:
+  data/<ds>/issues.jsonl        issue text as the workflow saw it
+  data/<ds>/answer_key.jsonl    independent answer key; a record holds only the
+                                fields that have one; a value may be a list of
+                                acceptable answers
+  data/<ds>/split.json          dev / test (have a key) and queue (no key)
+  data/<ds>/adjudications.jsonl human decisions made after seeing outputs
+  runs/<ds>/<version>/          outputs, mutants, evaluator scores
+"""
 import json
 from collections import defaultdict
 from pathlib import Path
 
 from . import gates, mutations, schema
 from .gates import FAIL
-from .stats import cohen_kappa, macro_f1, percentile, wilson
+from .stats import macro_f1, percentile, wilson
 
-FIELDS = gates.LABEL_FIELDS
+FIELDS = schema.FIELDS
+EVAL_METRICS = ("classification", "faithfulness", "consistency")
 
 
 def load_jsonl(path):
@@ -19,43 +30,42 @@ def by_id(rows, key="id"):
     return {r[key]: r for r in rows}
 
 
-def apply_review(labels, changes):
-    """Labels after Claude's review: the labeler's own answers plus any field
-    they changed after discussing it. The raw file is never edited."""
-    out = {k: dict(v) for k, v in labels.items()}
-    for c in changes:
-        if c["id"] in out:
-            out[c["id"]][c["field"]] = c["final"]
+def apply_adjudications(key, adjudications):
+    """Answer key after the human settled key-vs-model disagreements.
+    The committed answer key is never edited; this is a derived view."""
+    out = {k: dict(v) for k, v in key.items()}
+    for a in adjudications:
+        if a.get("kind") == "key_disagreement" and a["issue_id"] in out:
+            out[a["issue_id"]][a["field"]] = a["final"]
     return out
 
 
 class Data:
-    def __init__(self, root=".", version="v1", labels="raw"):
+    def __init__(self, root=".", dataset="sim", version="v1", key="original"):
         r = Path(root)
-        self.version = version
-        self.issues = by_id(load_jsonl(r / "data/issues.jsonl"))
-        self.labels = by_id(load_jsonl(r / "data/labels.jsonl"))
-        self.label_mode = labels
-        self.review_changes = load_jsonl(r / "data/label_review.jsonl")
-        if labels == "reviewed":
-            self.labels = apply_review(self.labels, self.review_changes)
-        self.split = json.load(open(r / "data/split.json"))
-        self.outputs = [o for o in load_jsonl(r / f"runs/{version}/outputs.jsonl")
-                        if o.get("version") == version]
-        self.mutants = load_jsonl(r / f"runs/{version}/mutants.jsonl")
-        self.evaluator = load_jsonl(r / f"runs/{version}/evaluator.jsonl")
-        self.adjudications = by_id(load_jsonl(r / "data/adjudications.jsonl"), "record_id")
-        self.recheck = by_id(load_jsonl(r / "data/labels_recheck.jsonl"))
-        self.maintainer = by_id(load_jsonl(r / "data/maintainer_labels_HIDDEN.jsonl"))
-        ex = r / "data/excluded.json"
+        base = r / "data" / dataset
+        self.dataset, self.version, self.key_mode = dataset, version, key
+        self.tax = schema.get(dataset)
+        self.issues = by_id(load_jsonl(base / "issues.jsonl"))
+        self.adjudications = load_jsonl(base / "adjudications.jsonl")
+        self.key = by_id(load_jsonl(base / "answer_key.jsonl"))
+        if key == "adjudicated":
+            self.key = apply_adjudications(self.key, self.adjudications)
+        for k in self.key.values():
+            k.pop("id", None)
+        self.split = json.load(open(base / "split.json"))
+        ex = base / "excluded.json"
         self.excluded = set(json.load(open(ex))) if ex.exists() else set()
-        for table in (self.issues, self.labels, self.recheck, self.maintainer):
-            for i in self.excluded:
-                table.pop(i, None)
+        run = r / "runs" / dataset / version
+        self.outputs = [o for o in load_jsonl(run / "outputs.jsonl") if o.get("version") == version]
+        self.mutants = load_jsonl(run / "mutants.jsonl")
+        self.evaluator = load_jsonl(run / "evaluator.jsonl")
+        self.run_dir = run
 
     def ids(self, split):
-        ids = self.issues if split == "all" else self.split[split]
-        return sorted(i for i in ids if i not in self.excluded)
+        """'all' means every issue that has an answer key (dev + test)."""
+        ids = (self.split["dev"] + self.split["test"]) if split == "all" else self.split.get(split, [])
+        return sorted(i for i in ids if i not in self.excluded and i in self.issues)
 
     def primary(self, split):
         """Repeat 0 of each issue: the output the metrics are computed on."""
@@ -72,30 +82,66 @@ def parsed(o):
     return obj
 
 
+def _single(v):
+    return v[0] if isinstance(v, list) and len(v) == 1 else (None if isinstance(v, list) else v)
+
+
 def field_metrics(d, split):
     prim = d.primary(split)
-    ids = [i for i in d.ids(split) if i in prim and i in d.labels]
+    tax = d.tax
     out = {}
     for f in FIELDS:
-        gold = [d.labels[i][f] for i in ids]
-        pred = [(parsed(prim[i]) or {}).get(f) for i in ids]
-        m = {"accuracy": wilson(sum(g == p for g, p in zip(gold, pred)), len(ids))}
+        kf = {i: schema.key_field(f, d.key.get(i, {})) for i in d.ids(split) if i in prim}
+        ids = [i for i, k in kf.items() if k]
+        if not ids:
+            continue
+        preds = {i: (parsed(prim[i]) or {}).get(f) for i in ids}
+        hits = [gates.matches(kf[i], preds[i], d.key[i][kf[i]], tax) for i in ids]
+        m = {"accuracy": wilson(sum(hits), len(ids)), "graded_against": sorted({kf[i] for i in ids}),
+             "majority_baseline": majority_baseline(d, f, ids)}
+        single = [i for i in ids if _single(d.key[i][kf[i]]) is not None]
+        gold = [_single(d.key[i][kf[i]]) for i in single]
         if f == "category":
-            m["macro_f1"] = macro_f1(gold, pred, schema.CATEGORIES)
+            pred = [tax.grade_category(preds[i]) if kf[i] == "category_coarse" else preds[i] for i in single]
+            m["macro_f1"] = macro_f1(gold, pred, sorted(set(gold)))
         if f == "product_area":
-            m["macro_f1"] = macro_f1(gold, pred, schema.PRODUCT_AREAS)
+            m["macro_f1"] = macro_f1(gold, [preds[i] for i in single], sorted(set(gold)))
         if f == "priority":
-            near = sum(p in schema.PRIORITIES and abs(schema.priority_rank(p) - schema.priority_rank(g)) <= 1
-                       for g, p in zip(gold, pred))
-            m["within_one"] = wilson(near, len(ids))
+            near = sum(preds[i] in tax.priorities and abs(tax.rank(preds[i]) - tax.rank(g)) <= 1
+                       for i, g in zip(single, gold))
+            m["within_one"] = wilson(near, len(single))
+            m["confusion"] = {g: {p: sum(1 for i, gg in zip(single, gold) if gg == g and preds[i] == p)
+                                  for p in tax.priorities} for g in tax.priorities}
         if f == "needs_human":
-            tp = sum(g is True and p is True for g, p in zip(gold, pred))
-            m["precision_true"] = wilson(tp, sum(p is True for p in pred))
+            tp = sum(gold[k] is True and preds[i] is True for k, i in enumerate(single))
+            m["precision_true"] = wilson(tp, sum(preds[i] is True for i in single))
             m["recall_true"] = wilson(tp, sum(g is True for g in gold))
         out[f] = m
-    all_four = sum(all((parsed(prim[i]) or {}).get(f) == d.labels[i][f] for f in FIELDS) for i in ids)
-    out["all_four_fields"] = wilson(all_four, len(ids))
+    ids = [i for i in d.ids(split) if i in prim and d.key.get(i)]
+    all_ok = sum(not gates.label_dependent(prim[i].get("triage"), d.key[i], tax).failed()
+                 and bool(parsed(prim[i])) for i in ids)
+    out["all_graded_fields"] = wilson(all_ok, len(ids))
     return out
+
+
+def majority_baseline(d, field, ids):
+    """Accuracy of always answering the most common dev-split key value.
+    Chosen on dev only, so it isn't fitted to the split being scored."""
+    from collections import Counter
+    counts = Counter()
+    for i in d.ids("dev"):
+        kf = schema.key_field(field, d.key.get(i, {}))
+        if kf:
+            v = d.key[i][kf]
+            counts.update(v if isinstance(v, list) else [v])
+    if not counts:
+        return None
+    guess = counts.most_common(1)[0][0]
+    hits = 0
+    for i in ids:
+        v = d.key[i][schema.key_field(field, d.key[i])]
+        hits += guess in v if isinstance(v, list) else guess == v
+    return {"always": guess, **wilson(hits, len(ids))}
 
 
 def stability(d, split):
@@ -105,19 +151,17 @@ def stability(d, split):
         if o["issue_id"] in ids:
             runs[o["issue_id"]].append(parsed(o))
     full = {i: r for i, r in runs.items() if len(r) >= 2}
-    res = {}
-    for f in FIELDS:
-        same = sum(len({json.dumps((x or {}).get(f)) for x in r}) == 1 for r in full.values())
-        res[f] = wilson(same, len(full))
-    return res
+    return {f: wilson(sum(len({json.dumps((x or {}).get(f)) for x in r}) == 1 for r in full.values()),
+                      len(full)) for f in FIELDS}
 
 
 def gate_rates(d, split):
     prim = d.primary(split)
     res = {}
     for g in gates.LABEL_FREE:
-        statuses = [gates.label_free(o.get("triage"), d.issues[i]).by_gate()[g].status for i, o in prim.items()]
-        res[g] = {"fail": wilson(statuses.count(FAIL), len(statuses)), "skipped": statuses.count("skip")}
+        st = [gates.label_free(o.get("triage"), d.issues[i], d.tax).by_gate()[g].status
+              for i, o in prim.items()]
+        res[g] = {"fail": wilson(st.count(FAIL), len(st)), "skipped": st.count("skip")}
     return res
 
 
@@ -128,44 +172,42 @@ def telemetry(d, split):
                 if s.get("type") == "agent"]
     costs = [((o.get("log") or {}).get("cost") or {}).get("total") for o in outs]
     costs = [c for c in costs if isinstance(c, (int, float))]
+    pct = lambda vals: {"p50": percentile(vals, 0.5), "p95": percentile(vals, 0.95)}
     return {
         "runs": len(outs),
         "execution_failures": wilson(sum(not ok_exec(o) for o in outs), len(outs)),
-        "client_ms": {"p50": percentile([o.get("client_ms") for o in outs], 0.5),
-                      "p95": percentile([o.get("client_ms") for o in outs], 0.95)},
-        "server_total_ms": {"p50": percentile([(o.get("log") or {}).get("total_ms") for o in outs], 0.5),
-                            "p95": percentile([(o.get("log") or {}).get("total_ms") for o in outs], 0.95)},
-        "agent_block_ms": {"p50": percentile(agent_ms, 0.5), "p95": percentile(agent_ms, 0.95)},
+        "client_ms": pct([o.get("client_ms") for o in outs]),
+        "server_total_ms": pct([(o.get("log") or {}).get("total_ms") for o in outs]),
+        "agent_block_ms": pct(agent_ms),
         "cost_per_100_runs_usd": round(100 * sum(costs) / len(costs), 4) if costs else None,
         "log_poll_wait_s_max": max(((o.get("log") or {}).get("poll_wait_s") or 0) for o in outs) if outs else None,
     }
 
 
 def seeds(d):
-    """Correct outputs: pass every label-free gate and match the label on all four fields."""
-    prim = d.primary("all")
+    """Correct outputs: pass every label-free gate and agree with every field the
+    answer key has. Fields without a key are unverified; the report says so."""
     out = []
-    for i, o in sorted(prim.items()):
+    for i, o in sorted(d.primary("all").items()):
         obj = parsed(o)
-        if (i in d.labels and obj is not None
-                and gates.label_free(obj, d.issues[i]).passed_all()
-                and all(obj.get(f) == d.labels[i][f] for f in FIELDS)):
+        if (obj is not None and d.key.get(i)
+                and gates.label_free(obj, d.issues[i], d.tax).passed_all()
+                and not gates.label_dependent(obj, d.key[i], d.tax).failed()):
             out.append({"issue_id": i, "output": obj})
     return out
 
 
 def natural_errors(d, split="all"):
-    prim = d.primary(split)
     errs = []
-    for i, o in sorted(prim.items()):
-        obj = parsed(o)
-        if i in d.labels and (obj is None or any(obj.get(f) != d.labels[i][f] for f in FIELDS)):
+    for i, o in sorted(d.primary(split).items()):
+        if d.key.get(i) and (parsed(o) is None
+                             or gates.label_dependent(o.get("triage"), d.key[i], d.tax).failed()):
             errs.append({"issue_id": i, "output": o.get("triage")})
     return errs
 
 
-def caught(output, issue, label):
-    v = gates.check(output, issue, label)
+def caught(output, issue, gold, tax):
+    v = gates.check(output, issue, tax, gold)
     free = bool(v.failed(gates.LABEL_FREE))
     dep = bool(v.failed(gates.LABEL_DEPENDENT))
     return {"label_free": free, "label_dependent": dep, "union": free or dep}
@@ -175,8 +217,7 @@ def evaluator_flags(d, cutoff=3, min_votes=2):
     """input_id -> flagged, under the pre-registered rule (any metric <= cutoff in >= 2 of 3 repeats)."""
     votes = defaultdict(list)
     for r in d.evaluator:
-        scores = r.get("scores") or {}
-        vals = [scores.get(m) for m in ("classification", "faithfulness", "consistency")]
+        vals = [(r.get("scores") or {}).get(m) for m in EVAL_METRICS]
         if r.get("ok") and all(isinstance(v, (int, float)) for v in vals):
             votes[r["input_id"]].append(min(vals) <= cutoff)
     return {k: sum(v) >= min_votes for k, v in votes.items() if len(v) >= min_votes}
@@ -190,14 +231,16 @@ def mutation_recall(d):
         if not m["applicable"]:
             not_applicable[m["operator"]] += 1
             continue
-        c = caught(m["output"], d.issues[m["issue_id"]], d.labels[m["issue_id"]])
+        c = caught(m["output"], d.issues[m["issue_id"]], d.key[m["issue_id"]], d.tax)
         if m["mutant_id"] in flags:
             c["evaluator"] = flags[m["mutant_id"]]
         for checker, hit in c.items():
             per[m["operator"]][checker][0] += hit
             per[m["operator"]][checker][1] += 1
-    table = {op: {ch: wilson(k, n) for ch, (k, n) in v.items()} for op, v in per.items()}
-    return {"by_operator": table, "not_applicable": dict(not_applicable)}
+    keyed = sorted({f for k in d.key.values() for f in k})
+    return {"by_operator": {op: {ch: wilson(k, n) for ch, (k, n) in v.items()} for op, v in per.items()},
+            "not_applicable": dict(not_applicable),
+            "fields_with_answer_key": keyed}
 
 
 def evaluator_sweep(d):
@@ -207,85 +250,70 @@ def evaluator_sweep(d):
     rows = {}
     for cutoff in (1, 2, 3, 4):
         flags = evaluator_flags(d, cutoff=cutoff)
-        rows[cutoff] = {
-            "mutant_detection": wilson(sum(flags.get(i, False) for i in mutant_ids & set(flags)),
-                                       len(mutant_ids & set(flags))),
-            "seed_flag_rate": wilson(sum(flags.get(i, False) for i in seed_ids & set(flags)),
-                                     len(seed_ids & set(flags))),
-        }
+        judged_m, judged_s = mutant_ids & set(flags), seed_ids & set(flags)
+        rows[cutoff] = {"mutant_detection": wilson(sum(flags[i] for i in judged_m), len(judged_m)),
+                        "seed_flag_rate": wilson(sum(flags[i] for i in judged_s), len(judged_s))}
     return rows
 
 
-def label_reliability(d):
-    out = {}
-    common = sorted(set(d.recheck) & set(d.labels))
-    if common:
-        out["recheck_n"] = len(common)
-        for f in FIELDS:
-            a = [d.labels[i][f] for i in common]
-            b = [d.recheck[i][f] for i in common]
-            out[f] = {"agreement": wilson(sum(x == y for x, y in zip(a, b)), len(a)),
-                      "kappa": cohen_kappa(a, b)}
-    mapping = {"bug": {"bug"}, "feature": {"feature_request", "integration_request"}}
-    pairs = []
-    for i, lab in d.labels.items():
-        m = set(d.maintainer.get(i, {}).get("labels", [])) & set(mapping)
-        if len(m) == 1:
-            pairs.append(lab["category"] in mapping[m.pop()])
-    if pairs:
-        out["maintainer_bug_feature_agreement"] = wilson(sum(pairs), len(pairs))
-    return out
-
-
 def natural_error_detection(d, split="all"):
-    """Real model mistakes (disagree with labels): which checkers notice them without labels?"""
+    """Real model mistakes: which checkers notice them without an answer key?"""
     errs = natural_errors(d, split)
     flags = evaluator_flags(d)
-    lf = sum(bool(gates.label_free(e["output"], d.issues[e["issue_id"]]).failed()) for e in errs)
+    lf = sum(bool(gates.label_free(e["output"], d.issues[e["issue_id"]], d.tax).failed()) for e in errs)
     judged = [e for e in errs if f"natural:{e['issue_id']}" in flags]
-    ev = sum(flags[f"natural:{e['issue_id']}"] for e in judged)
     return {"n_errors": len(errs), "label_free": wilson(lf, len(errs)),
-            "evaluator": wilson(ev, len(judged))}
+            "evaluator": wilson(sum(flags[f"natural:{e['issue_id']}"] for e in judged), len(judged))}
+
+
+def key_disagreements(d):
+    """Summary of human adjudication of answer-key vs model disagreements."""
+    adj = [a for a in d.adjudications if a.get("kind") == "key_disagreement"]
+    if not adj:
+        return None
+    verdicts = defaultdict(int)
+    for a in adj:
+        verdicts[a["verdict"]] += 1
+    return {"n": len(adj), "verdicts": dict(verdicts),
+            "key_was_wrong": wilson(verdicts["model_right"] + verdicts["neither"], len(adj))}
 
 
 def overall_label_free_mutation_recall(d):
-    k = n = 0
-    for m in d.mutants:
-        if m["applicable"]:
-            k += caught(m["output"], d.issues[m["issue_id"]], d.labels[m["issue_id"]])["label_free"]
-            n += 1
-    return wilson(k, n)
+    hits = [caught(m["output"], d.issues[m["issue_id"]], d.key[m["issue_id"]], d.tax)["label_free"]
+            for m in d.mutants if m["applicable"]]
+    return wilson(sum(hits), len(hits))
 
 
 def regression_pass_rate(d, split):
     prim = d.primary(split)
-    ids = [i for i in prim if i in d.labels]
-    ok = sum(gates.check(prim[i].get("triage"), d.issues[i], d.labels[i]).passed_all() for i in ids)
+    ids = [i for i in prim if d.key.get(i)]
+    ok = sum(gates.check(prim[i].get("triage"), d.issues[i], d.tax, d.key[i]).passed_all() for i in ids)
     return wilson(ok, len(ids))
 
 
 def build(d, split):
     return {
-        "version": d.version, "split": split, "labels": d.label_mode,
-        "review_changes": len(d.review_changes),
-        "n_labeled": len(d.labels), "n_outputs": len(d.outputs),
+        "dataset": d.dataset, "version": d.version, "split": split, "answer_key": d.key_mode,
+        "n_issues_with_key": len(d.ids("all")), "n_queue": len(d.ids("queue")),
+        "n_outputs": len(d.outputs),
         "fields": field_metrics(d, split),
         "stability_across_repeats": stability(d, split),
         "label_free_gate_failure_rates": gate_rates(d, split),
+        "queue_gate_failure_rates": gate_rates(d, "queue") if d.ids("queue") else None,
         "regression_pass_rate": regression_pass_rate(d, split),
         "telemetry": telemetry(d, split),
         "mutation": mutation_recall(d) if d.mutants else None,
         "natural_errors": natural_error_detection(d, split),
         "evaluator_sweep": evaluator_sweep(d) if d.evaluator else None,
-        "label_reliability": label_reliability(d),
+        "key_disagreements": key_disagreements(d),
     }
 
 
 def write_mutants(d, path=None):
-    path = path or f"runs/{d.version}/mutants.jsonl"
+    path = Path(path or d.run_dir / "mutants.jsonl")
     seed_rows = seeds(d)
-    muts = mutations.generate(seed_rows, d.issues)
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    muts = mutations.generate(seed_rows, d.issues, d.tax)
+    path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
         for m in muts:
             f.write(json.dumps(m) + "\n")
