@@ -170,8 +170,12 @@ def telemetry(d, split):
     outs = [o for o in d.outputs if o["issue_id"] in ids]
     agent_ms = [s["duration_ms"] for o in outs for s in (o.get("log") or {}).get("spans", [])
                 if s.get("type") == "agent"]
-    costs = [((o.get("log") or {}).get("cost") or {}).get("total") for o in outs]
-    costs = [c for c in costs if isinstance(c, (int, float))]
+    costs, model_costs = [], []
+    for o in outs:
+        c = (o.get("log") or {}).get("cost") or {}
+        if isinstance(c.get("total"), (int, float)):
+            costs.append(c["total"])
+            model_costs.append(sum(i.get("cost", 0) for i in c.get("items", []) if i.get("category") == "model"))
     pct = lambda vals: {"p50": percentile(vals, 0.5), "p95": percentile(vals, 0.95)}
     return {
         "runs": len(outs),
@@ -179,7 +183,10 @@ def telemetry(d, split):
         "client_ms": pct([o.get("client_ms") for o in outs]),
         "server_total_ms": pct([(o.get("log") or {}).get("total_ms") for o in outs]),
         "agent_block_ms": pct(agent_ms),
-        "cost_per_100_runs_usd": round(100 * sum(costs) / len(costs), 4) if costs else None,
+        # Sim's logged total includes a fixed $0.005 "execution_fee" per run even when
+        # billing is disabled (self-hosted); the model line is what the provider bills.
+        "logged_cost_per_100_runs_usd": round(100 * sum(costs) / len(costs), 4) if costs else None,
+        "model_cost_per_100_runs_usd": round(100 * sum(model_costs) / len(model_costs), 4) if model_costs else None,
         "log_poll_wait_s_max": max(((o.get("log") or {}).get("poll_wait_s") or 0) for o in outs) if outs else None,
     }
 
