@@ -134,3 +134,14 @@ and CI runs it.
   so a run cut short by API credits still covers every input once; (2) a
   single-run verdict (repeat 0 only) is reported as a secondary column, to
   show what a customer running the Evaluator once per output would see.
+- 2026-09-25, after the first Evaluator pass and before any recall or
+  false-flag number was computed: the Evaluator's real cost was $0.012 per
+  check (2,509 Sim checks cost $30.43). The single test call suggested about
+  $0.0047; the judge's answers average 683 output tokens, not about 25. Runs 2
+  and 3 would have cost about $76 more and were cancelled for budget. The
+  **primary** Evaluator verdict is therefore the single run (flagged if any
+  metric is 3 or lower in repeat 0), which is also how a customer running the
+  Evaluator once per output would use it. The 2-of-3 majority rule stays in
+  the code and is reported only where 3 runs exist. Judge consistency may be
+  measured later on a small subset, if budget allows.
+

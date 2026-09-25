@@ -40,15 +40,15 @@ def test_score_one_extracts_metric_scores(project):  # noqa: F811
     assert not bad["ok"]
 
 
-def test_flag_rules_majority_primary_and_single_secondary(project):  # noqa: F811
+def test_flag_rules_single_primary_and_majority_secondary(project):  # noqa: F811
     d = report.Data(".", "sim", "v1")
     mk = lambda i, rep, c: {"input_id": i, "repeat": rep, "ok": True,
                             "scores": {"classification": c, "faithfulness": 5, "consistency": 5}}
     d.evaluator = [mk("a", 0, 3), mk("a", 1, 5), mk("a", 2, 2),     # 2 of 3 flag -> flagged
                    mk("b", 0, 3), mk("b", 1, 4), mk("b", 2, 5),     # 1 of 3 -> not flagged; single says flagged
                    mk("c", 0, 1)]                                   # only 1 run -> no majority verdict
-    assert report.evaluator_flags(d) == {"a": True, "b": False}
-    assert report.evaluator_flags(d, rule="single") == {"a": True, "b": True, "c": True}
+    assert report.evaluator_flags(d, rule="majority") == {"a": True, "b": False}
+    assert report.evaluator_flags(d) == {"a": True, "b": True, "c": True}      # single run is primary
     st = report.evaluator_stability(d)
     assert st["verdict_identical_across_3_runs"]["k"] == 0 and st["verdict_identical_across_3_runs"]["n"] == 2
 

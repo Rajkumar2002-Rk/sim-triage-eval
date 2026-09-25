@@ -245,10 +245,11 @@ def caught(output, issue, gold, tax):
     return {"label_free": free, "label_dependent": dep, "union": free or dep}
 
 
-def evaluator_flags(d, cutoff=3, rule="majority"):
+def evaluator_flags(d, cutoff=3, rule="single"):
     """input_id -> flagged (any metric <= cutoff).
-    majority (primary, pre-registered): >= 2 of 3 valid runs flag; inputs with fewer
-    than 3 valid runs get no verdict. single: the repeat-0 run alone (secondary)."""
+    single (primary since the 2026-09-25 cost deviation): the repeat-0 run alone.
+    majority (as first pre-registered): >= 2 of 3 valid runs flag; inputs with
+    fewer than 3 valid runs get no verdict."""
     runs = defaultdict(dict)
     for r in d.evaluator:
         vals = [(r.get("scores") or {}).get(m) for m in EVAL_METRICS]
@@ -277,7 +278,7 @@ def evaluator_stability(d, cutoff=3):
 
 def mutation_recall(d):
     flags = evaluator_flags(d)
-    single = evaluator_flags(d, rule="single")
+    majority = evaluator_flags(d, rule="majority")
     per = defaultdict(lambda: defaultdict(lambda: [0, 0]))
     not_applicable = defaultdict(int)
     for m in d.mutants:
@@ -288,8 +289,8 @@ def mutation_recall(d):
         if m["mutant_id"] in flags:
             c["evaluator"] = flags[m["mutant_id"]]
             c["gates_or_evaluator"] = c["label_free"] or c["evaluator"]
-        if m["mutant_id"] in single:
-            c["evaluator_single_run"] = single[m["mutant_id"]]
+        if m["mutant_id"] in majority:
+            c["evaluator_majority_of_3"] = majority[m["mutant_id"]]
         for checker, hit in c.items():
             per[m["operator"]][checker][0] += hit
             per[m["operator"]][checker][1] += 1
