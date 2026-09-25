@@ -18,6 +18,7 @@ from .gates import FAIL
 from .stats import macro_f1, percentile, wilson
 
 FIELDS = schema.FIELDS
+SIM_BASE_EXECUTION_FEE = 0.005   # BASE_EXECUTION_CHARGE in Sim's lib/billing/constants.ts
 EVAL_METRICS = ("classification", "faithfulness", "consistency")
 
 
@@ -184,12 +185,17 @@ def telemetry(d, split):
     outs = [o for o in d.outputs if o["issue_id"] in ids]
     agent_ms = [s["duration_ms"] for o in outs for s in (o.get("log") or {}).get("spans", [])
                 if s.get("type") == "agent"]
-    costs, model_costs = [], []
+    costs, model_costs, derived = [], [], 0
     for o in outs:
         c = (o.get("log") or {}).get("cost") or {}
         if isinstance(c.get("total"), (int, float)):
             costs.append(c["total"])
-            model_costs.append(sum(i.get("cost", 0) for i in c.get("items", []) if i.get("category") == "model"))
+            if c.get("items") is None:
+                # Read before Sim wrote the breakdown; total = fixed fee + model cost.
+                model_costs.append(max(0.0, c["total"] - SIM_BASE_EXECUTION_FEE))
+                derived += 1
+            else:
+                model_costs.append(sum(i.get("cost", 0) for i in c["items"] if i.get("category") == "model"))
     pct = lambda vals: {"p50": percentile(vals, 0.5), "p95": percentile(vals, 0.95)}
     attempts = [o for o in d.attempts if o["issue_id"] in ids]
     rate_limited = (sum(o.get("http_status") == 429 for o in attempts)
@@ -205,6 +211,7 @@ def telemetry(d, split):
         # billing is disabled (self-hosted); the model line is what the provider bills.
         "logged_cost_per_100_runs_usd": round(100 * sum(costs) / len(costs), 4) if costs else None,
         "model_cost_per_100_runs_usd": round(100 * sum(model_costs) / len(model_costs), 4) if model_costs else None,
+        "model_cost_derived_from_total": derived,
         "log_poll_wait_s_max": max(((o.get("log") or {}).get("poll_wait_s") or 0) for o in outs) if outs else None,
     }
 

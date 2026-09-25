@@ -34,7 +34,11 @@ class SimClient:
         while True:
             r = self.http.get(f"{self.base}/api/v2/logs/{run_id}")
             data = r.json().get("data", {}) if r.status_code == 200 else {}
-            if data.get("status") in TERMINAL or waited >= max_wait_s:
+            # The cost breakdown (cost.items) is written ~20ms after the status turns
+            # terminal; wait for it too so telemetry isn't missing its line items.
+            cost = data.get("cost") or {}
+            settled = data.get("status") in TERMINAL and (not cost or cost.get("items") is not None)
+            if settled or waited >= max_wait_s:
                 return r.status_code, data, waited
             sleep(interval_s)
             waited += interval_s

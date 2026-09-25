@@ -49,4 +49,9 @@ listed separately, and each gets a pinned regression test.
 
 ## Found against real outputs
 
-(none yet)
+- 2026-09-25, telemetry: `report` crashed on 379 of 1,608 real v1 runs whose
+  logged cost had `items: null` (Sim writes the breakdown about 17ms after
+  the run completes). The code assumed `items` was always a list. Fixed: model
+  cost is derived as total minus Sim's fixed $0.005 fee, the derived count is
+  reported, and the client now waits for items. Pinned:
+  `tests/test_regressions.py::test_2026_09_25_*`.
