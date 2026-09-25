@@ -112,6 +112,18 @@ it's counted and reported, not silently dropped.
 - It is compared side by side with label-free gates, label-dependent gates, and
   their union.
 
+## 6b. Adjudication (false alarms need a human)
+
+Seeds pass every label-free gate by construction, so the label-free gates'
+false-alarm rate can't be measured on seeds. It is measured on real outputs:
+every label-free gate failure on a real v1 output is reviewed by hand and
+marked `true_defect` or `false_alarm`, with a one-line reason, in
+`data/adjudications.jsonl`. The same applies to every Evaluator flag on a
+clean seed: a seed passes the deterministic checks but could still contain a
+defect they can't see, so an Evaluator flag there may be a real catch. False-
+alarm rates are reported only from adjudicated records. Adjudication is done
+by the labeler, with the model output visible, after labeling is complete.
+
 ## 7. Improvement loop
 
 v1 prompt, then a dev run. From dev failures only, write the v2 prompt, then run
@@ -133,4 +145,5 @@ secrets. CI runs the report and the test suite offline.
 
 ## Deviations
 
-(none)
+- 2026-09-25, before any model output: added section 6b (adjudication).
+  Measuring false alarms on seeds would have been circular.
