@@ -100,3 +100,14 @@ def test_excluded_issue_is_dropped_everywhere(project):
     assert "sim-4" not in d.ids("all") and "sim-4" not in d.ids("test")
     assert report.field_metrics(d, "all")["category"]["accuracy"]["n"] == 3
     assert all(s["issue_id"] != "sim-4" for s in report.seeds(d))
+
+
+def test_reviewed_labels_apply_changes_without_touching_raw(project):
+    (project / "data/label_review.jsonl").write_text(json.dumps(
+        {"id": "sim-3", "field": "priority", "raw": "urgent", "final": "high", "reason": "x"}) + "\n")
+    raw = report.Data(".", "v1", "raw")
+    rev = report.Data(".", "v1", "reviewed")
+    assert raw.labels["sim-3"]["priority"] == "urgent"
+    assert rev.labels["sim-3"]["priority"] == "high"
+    assert report.field_metrics(rev, "all")["priority"]["accuracy"]["k"] == 4
+    assert report.field_metrics(raw, "all")["priority"]["accuracy"]["k"] == 3

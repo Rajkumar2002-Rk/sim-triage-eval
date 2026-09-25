@@ -58,7 +58,7 @@ def cmd_run(args):
 
 def _data(args):
     from . import report
-    d = report.Data(".", args.version)
+    d = report.Data(".", args.version, getattr(args, "labels", "raw"))
     if not d.outputs:
         print(f"no recorded outputs for {args.version} in runs/{args.version}/", file=sys.stderr)
         return None
@@ -173,6 +173,8 @@ def main(argv=None):
     rp.add_argument("--version", required=True)
     rp.add_argument("--split", choices=("dev", "test", "all"), default="test")
     rp.add_argument("--metric", choices=METRICS, default="pass_rate")
+    rp.add_argument("--labels", choices=("raw", "reviewed"), default="raw",
+                    help="raw = labeler alone (primary); reviewed = after Claude's review")
     rp.add_argument("--fail-under", type=float)
     rp.add_argument("--json", help="write the full report here")
     rp.set_defaults(fn=cmd_report)

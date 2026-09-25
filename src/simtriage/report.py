@@ -19,12 +19,26 @@ def by_id(rows, key="id"):
     return {r[key]: r for r in rows}
 
 
+def apply_review(labels, changes):
+    """Labels after Claude's review: the labeler's own answers plus any field
+    they changed after discussing it. The raw file is never edited."""
+    out = {k: dict(v) for k, v in labels.items()}
+    for c in changes:
+        if c["id"] in out:
+            out[c["id"]][c["field"]] = c["final"]
+    return out
+
+
 class Data:
-    def __init__(self, root=".", version="v1"):
+    def __init__(self, root=".", version="v1", labels="raw"):
         r = Path(root)
         self.version = version
         self.issues = by_id(load_jsonl(r / "data/issues.jsonl"))
         self.labels = by_id(load_jsonl(r / "data/labels.jsonl"))
+        self.label_mode = labels
+        self.review_changes = load_jsonl(r / "data/label_review.jsonl")
+        if labels == "reviewed":
+            self.labels = apply_review(self.labels, self.review_changes)
         self.split = json.load(open(r / "data/split.json"))
         self.outputs = [o for o in load_jsonl(r / f"runs/{version}/outputs.jsonl")
                         if o.get("version") == version]
@@ -252,7 +266,8 @@ def regression_pass_rate(d, split):
 
 def build(d, split):
     return {
-        "version": d.version, "split": split,
+        "version": d.version, "split": split, "labels": d.label_mode,
+        "review_changes": len(d.review_changes),
         "n_labeled": len(d.labels), "n_outputs": len(d.outputs),
         "fields": field_metrics(d, split),
         "stability_across_repeats": stability(d, split),

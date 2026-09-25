@@ -152,3 +152,11 @@ secrets. CI runs the report and the test suite offline.
   while the labeler learned the guide. It is excluded from every metric
   (`data/excluded.json`), so test has n=39 and the total is n=99. The labeler
   labels all other issues alone.
+- 2026-09-25, during labeling: at the labeler's request, Claude reviews each
+  label after it's saved. The labeler's saved answers (`data/labels.jsonl`)
+  stay as they are and are the **primary** ground truth. Any field changed
+  after review goes to `data/label_review.jsonl` with the original, the final
+  value and the reason. Every metric is reported under both `raw` and
+  `reviewed` labels, along with the number of changes. The reviewed labels
+  carry Claude's influence, and Claude is also the model under test, so they're
+  a sensitivity analysis only.
