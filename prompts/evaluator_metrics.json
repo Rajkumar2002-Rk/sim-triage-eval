@@ -1,0 +1,26 @@
+[
+  {
+    "name": "classification",
+    "range": [
+      1,
+      5
+    ],
+    "description": "Are category, priority, product_area and needs_human each correct for this issue under the rubric? 5 = all four correct; 1 = category wrong or several fields wrong."
+  },
+  {
+    "name": "faithfulness",
+    "range": [
+      1,
+      5
+    ],
+    "description": "Does the summary state only what the issue says, as one line of at most 160 characters? Any invented number, version, name, service or claim, or a statement that contradicts the issue, scores 2 or lower."
+  },
+  {
+    "name": "consistency",
+    "range": [
+      1,
+      5
+    ],
+    "description": "Is the output well-formed (all five fields present, no extra fields, values from the allowed sets) and consistent with the rubric's rules that must hold? 5 = fully consistent; 1 = malformed or breaks a rule."
+  }
+]

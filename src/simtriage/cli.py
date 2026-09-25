@@ -78,6 +78,28 @@ def cmd_mutate(args):
     return EXIT_OK
 
 
+def cmd_evaluate(args):
+    import os
+
+    from . import evaluator
+    from .sim_client import SimClient
+    key = os.environ.get("SIM_API_KEY")
+    wf = args.workflow_id or os.environ.get("SIM_EVAL_WORKFLOW_ID")
+    if not key or not wf:
+        print("set SIM_API_KEY and SIM_EVAL_WORKFLOW_ID (or --workflow-id)", file=sys.stderr)
+        return EXIT_USAGE
+    d = _data(args)
+    if d is None:
+        return EXIT_NO_DATA
+    if not d.mutants:
+        print(f"no mutants; run `simtriage mutate --version {args.version}` first", file=sys.stderr)
+        return EXIT_NO_DATA
+    client = SimClient(os.environ.get("SIM_BASE_URL", "http://localhost:3000"), key)
+    n_inputs, n_jobs = evaluator.run(client, wf, d, args.repeats, args.concurrency, limit=args.limit)
+    print(f"{n_inputs} inputs, {n_jobs} evaluator runs recorded")
+    return EXIT_OK
+
+
 METRICS = ("pass_rate", "label_free_mutation_recall")
 
 
@@ -138,6 +160,14 @@ def main(argv=None):
     mu = sub.add_parser("mutate", help="generate the mutant set from correct outputs")
     mu.add_argument("--version", required=True)
     mu.set_defaults(fn=cmd_mutate)
+
+    ev = sub.add_parser("evaluate", help="score seeds, mutants and natural errors with the Sim Evaluator workflow")
+    ev.add_argument("--version", required=True)
+    ev.add_argument("--repeats", type=int, default=3)
+    ev.add_argument("--concurrency", type=int, default=4)
+    ev.add_argument("--limit", type=int, help="only the first N inputs (for a dry run)")
+    ev.add_argument("--workflow-id")
+    ev.set_defaults(fn=cmd_evaluate)
 
     rp = sub.add_parser("report", help="rebuild all numbers offline from committed files")
     rp.add_argument("--version", required=True)
