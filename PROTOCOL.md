@@ -122,4 +122,9 @@ and CI runs it.
 
 ## Deviations
 
-(none)
+- 2026-09-25, before any Evaluator run: section 6 says temperature 0. Sim's
+  Evaluator block hides temperature and fixes it at 0.1
+  (`EVALUATOR.DEFAULT_TEMPERATURE`), and it generates its own system prompt
+  from the metrics ("... only scores"). The Evaluator runs as Sim ships it:
+  default model (`claude-sonnet-5` in this image, recorded from the logs),
+  temperature 0.1. The 3 repeats already capture its run-to-run variation.

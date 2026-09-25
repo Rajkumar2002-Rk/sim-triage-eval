@@ -58,10 +58,11 @@ Build the same shape twice. Only the prompt and the response format differ.
      TRIAGE OUTPUT:
      <start.triage_output>
      ```
-   - Model: leave the default and record what it is.
-   - Advanced: temperature **0**. System prompt: "Score the triage output
-     against the RUBRIC given in the content. Judge only against that rubric."
+   - Model: leave the default (`claude-sonnet-5` in this image).
    - API key, if it asks: `{{ANTHROPIC_API_KEY}}`.
+   - There is nothing else to set. Sim hides the Evaluator's temperature (fixed
+     at 0.1) and system prompt (generated from the metrics). That's why the
+     rubric goes in through the content.
 4. Deploy, then:
    ```bash
    export SIM_EVAL_WORKFLOW_ID=paste-id
