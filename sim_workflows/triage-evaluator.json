@@ -1,0 +1,239 @@
+{
+  "deployed_at": "2026-09-25T17:52:41.943",
+  "deployment_version": 2,
+  "state": {
+    "blocks": {
+      "5192cba7-69a5-4818-8a1b-0d65346817fa": {
+        "advancedMode": false,
+        "data": {
+          "canonicalModes": {
+            "vertexCredential": "basic"
+          }
+        },
+        "enabled": true,
+        "errorEnabled": false,
+        "height": 0,
+        "horizontalHandles": true,
+        "id": "5192cba7-69a5-4818-8a1b-0d65346817fa",
+        "locked": false,
+        "name": "Evaluator",
+        "outputs": {
+          "content": {
+            "description": "Evaluation results",
+            "type": "string"
+          },
+          "cost": {
+            "description": "Cost information",
+            "type": "json"
+          },
+          "model": {
+            "description": "Model used",
+            "type": "string"
+          },
+          "tokens": {
+            "description": "Token usage",
+            "type": "json"
+          }
+        },
+        "position": {
+          "x": 481,
+          "y": 16
+        },
+        "subBlocks": {
+          "apiKey": {
+            "id": "apiKey",
+            "type": "short-input",
+            "value": "{{ANTHROPIC_API_KEY}}"
+          },
+          "azureApiVersion": {
+            "id": "azureApiVersion",
+            "type": "short-input",
+            "value": null
+          },
+          "azureEndpoint": {
+            "id": "azureEndpoint",
+            "type": "short-input",
+            "value": null
+          },
+          "bedrockAccessKeyId": {
+            "id": "bedrockAccessKeyId",
+            "type": "short-input",
+            "value": null
+          },
+          "bedrockRegion": {
+            "id": "bedrockRegion",
+            "type": "short-input",
+            "value": null
+          },
+          "bedrockSecretKey": {
+            "id": "bedrockSecretKey",
+            "type": "short-input",
+            "value": null
+          },
+          "content": {
+            "id": "content",
+            "type": "long-input",
+            "value": "RUBRIC:\n<start.rubric>\n\nISSUE:\n<start.issue>\n\nTRIAGE OUTPUT:\n<start.triage_output>"
+          },
+          "fallbackModels": {
+            "id": "fallbackModels",
+            "type": "model-fallback-list",
+            "value": null
+          },
+          "metrics": {
+            "id": "metrics",
+            "type": "eval-input",
+            "value": [
+              {
+                "description": "Are category, priority, product_area and needs_human each correct for this issue under the rubric? 5 = all four correct; 1 = category wrong or several fields wrong.",
+                "id": "2120d5a8-4447-45d7-86c2-0adb1ead988f",
+                "name": "classification",
+                "range": {
+                  "max": 5,
+                  "min": 1
+                }
+              },
+              {
+                "description": "Does the summary state only what the issue says, as one line of at most 160 characters? Any invented number, version, name, service or claim, or a statement that contradicts the issue, scores 2 or lower.",
+                "id": "4c4a40b8-ba7f-44d0-8a72-f68bc0b24c4e",
+                "name": "faithfulness",
+                "range": {
+                  "max": 5,
+                  "min": 1
+                }
+              },
+              {
+                "description": "Is the output well-formed (all five fields present, no extra fields, values from the allowed sets) and consistent with the rubric's rules that must hold? 5 = fully consistent; 1 = malformed or breaks a rule.",
+                "id": "436828a5-f15e-487f-8cd9-749c94343e54",
+                "name": "consistency",
+                "range": {
+                  "max": 5,
+                  "min": 1
+                }
+              }
+            ]
+          },
+          "model": {
+            "id": "model",
+            "type": "combobox",
+            "value": "claude-sonnet-5"
+          },
+          "systemPrompt": {
+            "id": "systemPrompt",
+            "type": "code",
+            "value": "{\"systemPrompt\":\"You are an objective evaluation agent. Analyze the content against the provided metrics and provide detailed scoring.\\n\\nEvaluation Instructions:\\n- You MUST evaluate the content against each metric\\n- For each metric, provide a numeric score within the specified range\\n- Your response MUST be a valid JSON object with each metric name as a key and a numeric score as the value\\n- IMPORTANT: Use lowercase versions of the metric names as keys in your JSON response\\n- Follow the exact schema of the response format provided to you\\n- Do not include explanations in the JSON - only numeric scores\\n- Do not add any additional fields not specified in the schema\\n- Do not include ANY text before or after the JSON object\\n\\nMetrics to evaluate:\\n\\n\\nContent to evaluate:\\n\\n\\nExample of expected response format (with different scores):\\n{}\\n\\nRemember: Your response MUST be a valid JSON object containing only the lowercase metric names as keys with their numeric scores as values. No text explanations.\",\"responseFormat\":{\"name\":\"evaluation_response\",\"schema\":{\"type\":\"object\",\"properties\":{},\"required\":[],\"additionalProperties\":false},\"strict\":true}}"
+          },
+          "temperature": {
+            "id": "temperature",
+            "type": "slider",
+            "value": null
+          },
+          "vertexCredential": {
+            "id": "vertexCredential",
+            "type": "oauth-input",
+            "value": null
+          },
+          "vertexLocation": {
+            "id": "vertexLocation",
+            "type": "short-input",
+            "value": null
+          },
+          "vertexManualCredential": {
+            "id": "vertexManualCredential",
+            "type": "short-input",
+            "value": null
+          },
+          "vertexProject": {
+            "id": "vertexProject",
+            "type": "short-input",
+            "value": null
+          }
+        },
+        "triggerMode": false,
+        "type": "evaluator"
+      },
+      "c545ff53-f98e-402a-a695-c6f4e63035f6": {
+        "advancedMode": false,
+        "data": {},
+        "enabled": true,
+        "errorEnabled": false,
+        "height": 0,
+        "horizontalHandles": true,
+        "id": "c545ff53-f98e-402a-a695-c6f4e63035f6",
+        "locked": false,
+        "name": "Start",
+        "outputs": {
+          "conversationId": {
+            "description": "Conversation thread identifier",
+            "type": "string"
+          },
+          "files": {
+            "description": "User uploaded files",
+            "type": "file[]"
+          },
+          "input": {
+            "description": "Primary user input or message",
+            "type": "string"
+          }
+        },
+        "position": {
+          "x": 108.4375,
+          "y": -93
+        },
+        "subBlocks": {
+          "inputFormat": {
+            "id": "inputFormat",
+            "type": "input-format",
+            "value": [
+              {
+                "collapsed": false,
+                "id": "131f90c9-d7c8-448b-9de5-e3efabeca1b3",
+                "name": "rubric",
+                "type": "string",
+                "value": ""
+              },
+              {
+                "collapsed": false,
+                "id": "cfe8ac1d-b691-4f16-89a0-b7a2d85a3bfd",
+                "name": "issue",
+                "type": "string",
+                "value": ""
+              },
+              {
+                "collapsed": false,
+                "id": "4a5ca767-6504-4ccb-b115-622b639ad89e",
+                "name": "triage_output",
+                "type": "string",
+                "value": ""
+              }
+            ]
+          },
+          "runMetadata": {
+            "id": "runMetadata",
+            "type": "switch",
+            "value": false
+          }
+        },
+        "triggerMode": false,
+        "type": "start_trigger"
+      }
+    },
+    "edges": [
+      {
+        "data": {},
+        "id": "937b09a0-4060-4ef2-8cdf-23ffb98ea5f2",
+        "source": "c545ff53-f98e-402a-a695-c6f4e63035f6",
+        "sourceHandle": "source",
+        "target": "5192cba7-69a5-4818-8a1b-0d65346817fa",
+        "targetHandle": "target",
+        "type": "default"
+      }
+    ],
+    "lastSaved": 1790358761941,
+    "loops": {},
+    "parallels": {},
+    "variables": {}
+  },
+  "workflow": "triage-evaluator",
+  "workflow_id": "bb2fb07a-9adc-46d5-9a9b-bbb1ac34e874"
+}

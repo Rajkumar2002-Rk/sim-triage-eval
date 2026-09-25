@@ -1,0 +1,297 @@
+{
+  "deployed_at": "2026-09-25T17:34:12.145",
+  "deployment_version": 1,
+  "state": {
+    "blocks": {
+      "430d99c0-4d96-439e-8354-f90726ed2386": {
+        "advancedMode": false,
+        "data": {},
+        "enabled": true,
+        "errorEnabled": false,
+        "height": 0,
+        "horizontalHandles": true,
+        "id": "430d99c0-4d96-439e-8354-f90726ed2386",
+        "locked": false,
+        "name": "Start",
+        "outputs": {
+          "conversationId": {
+            "description": "Conversation thread identifier",
+            "type": "string"
+          },
+          "files": {
+            "description": "User uploaded files",
+            "type": "file[]"
+          },
+          "input": {
+            "description": "Primary user input or message",
+            "type": "string"
+          }
+        },
+        "position": {
+          "x": 104,
+          "y": -84
+        },
+        "subBlocks": {
+          "inputFormat": {
+            "id": "inputFormat",
+            "type": "input-format",
+            "value": [
+              {
+                "collapsed": false,
+                "id": "e3d9a2e8-07b4-41ed-8a6f-4a96bbf99024",
+                "name": "title",
+                "type": "string",
+                "value": ""
+              },
+              {
+                "collapsed": false,
+                "id": "d5b1a675-4a0d-46ed-8237-2b786e6fb1d5",
+                "name": "body",
+                "type": "string",
+                "value": ""
+              }
+            ]
+          },
+          "runMetadata": {
+            "id": "runMetadata",
+            "type": "switch",
+            "value": false
+          }
+        },
+        "triggerMode": false,
+        "type": "start_trigger"
+      },
+      "715da0b1-0f7c-4e15-aff4-37dcbf22b47e": {
+        "advancedMode": false,
+        "data": {
+          "canonicalModes": {
+            "files": "basic",
+            "vertexCredential": "basic"
+          }
+        },
+        "enabled": true,
+        "errorEnabled": false,
+        "height": 0,
+        "horizontalHandles": true,
+        "id": "715da0b1-0f7c-4e15-aff4-37dcbf22b47e",
+        "locked": false,
+        "name": "Agent",
+        "outputs": {
+          "content": {
+            "description": "Generated response content",
+            "type": "string"
+          },
+          "cost": {
+            "description": "Cost of the API call",
+            "type": "json"
+          },
+          "model": {
+            "description": "Model used for generation",
+            "type": "string"
+          },
+          "providerTiming": {
+            "description": "Provider timing information",
+            "type": "json"
+          },
+          "tokens": {
+            "description": "Token usage statistics",
+            "type": "json"
+          },
+          "toolCalls": {
+            "description": "Tool calls made",
+            "type": "json"
+          }
+        },
+        "position": {
+          "x": 556,
+          "y": -30
+        },
+        "subBlocks": {
+          "apiKey": {
+            "id": "apiKey",
+            "type": "short-input",
+            "value": "{{ANTHROPIC_API_KEY}}"
+          },
+          "attachmentFiles": {
+            "id": "attachmentFiles",
+            "type": "file-upload",
+            "value": null
+          },
+          "azureApiVersion": {
+            "id": "azureApiVersion",
+            "type": "short-input",
+            "value": null
+          },
+          "azureEndpoint": {
+            "id": "azureEndpoint",
+            "type": "short-input",
+            "value": null
+          },
+          "bedrockAccessKeyId": {
+            "id": "bedrockAccessKeyId",
+            "type": "short-input",
+            "value": null
+          },
+          "bedrockRegion": {
+            "id": "bedrockRegion",
+            "type": "short-input",
+            "value": null
+          },
+          "bedrockSecretKey": {
+            "id": "bedrockSecretKey",
+            "type": "short-input",
+            "value": null
+          },
+          "conversationId": {
+            "id": "conversationId",
+            "type": "short-input",
+            "value": null
+          },
+          "evaluationQuestions": {
+            "id": "evaluationQuestions",
+            "type": "code",
+            "value": null
+          },
+          "evaluationState": {
+            "id": "evaluationState",
+            "type": "long-input",
+            "value": null
+          },
+          "fallbackModels": {
+            "id": "fallbackModels",
+            "type": "model-fallback-list",
+            "value": null
+          },
+          "files": {
+            "id": "files",
+            "type": "short-input",
+            "value": null
+          },
+          "maxTokens": {
+            "id": "maxTokens",
+            "type": "short-input",
+            "value": null
+          },
+          "memoryType": {
+            "id": "memoryType",
+            "type": "dropdown",
+            "value": "none"
+          },
+          "messages": {
+            "id": "messages",
+            "type": "messages-input",
+            "value": [
+              {
+                "content": "You triage GitHub issues filed against Kubernetes (kubernetes/kubernetes), following the project's own triage rules. For each issue, return a JSON object with category, priority, product_area, needs_human and summary. Judge only what the issue says.\n\n## category (the issue's kind)\n- bug: something in Kubernetes is broken or behaves incorrectly.\n- regression: something that worked in an earlier release is now broken.\n- failing_test: a CI test or job that fails consistently.\n- flake: a CI test or job that fails intermittently.\n- feature: new functionality or an enhancement.\n- cleanup: refactoring, tech debt, or code and test hygiene with no user-visible change.\n- documentation: documentation is wrong or missing.\n- support: a user asking for help configuring or using Kubernetes.\n\n## priority (backlog < important-longterm < important-soon < critical-urgent)\nFrom the Kubernetes issue-triage guide:\n- critical-urgent: must be actively worked on now (\"drop what you're doing\"), and fixed before the next release. Examples: user-visible bugs in core features, broken builds, tests, and critical security issues.\n- important-soon: must be staffed and worked on currently or very soon, ideally in time for the next release. Important, but wouldn't block a release.\n- important-longterm: important over the long term, but may not be currently staffed and may take several releases. Wouldn't block a release.\n- backlog: general agreement that it's a nice-to-have, but no one is available to work on it soon. Community contributions welcome.\n\n## product_area (the owning SIG)\nPick the SIG that owns the code that would change.\n- api-machinery: API server, client-go, CRDs, admission, watch and list, garbage collection.\n- apps: workload controllers (Deployment, StatefulSet, DaemonSet, Job, CronJob, ReplicaSet, PodDisruptionBudget).\n- architecture: cross-cutting design, API conventions, production readiness.\n- auth: authentication, authorization and RBAC, service accounts, certificates, audit, pod security admission.\n- autoscaling: HPA, VPA, cluster autoscaler.\n- cli: kubectl, kustomize.\n- cloud-provider: cloud controller manager and cloud provider integrations.\n- cluster-lifecycle: kubeadm and cluster install and upgrade tooling.\n- contributor-experience: contributor tooling, GitHub automation, community process.\n- docs: the kubernetes.io documentation.\n- etcd: etcd as the cluster datastore.\n- instrumentation: metrics, logs, events and traces emitted by components.\n- k8s-infra: project infrastructure (CI clusters, image registries).\n- multicluster: multi-cluster APIs.\n- network: Services, kube-proxy, DNS, NetworkPolicy, Ingress and Gateway, dual-stack.\n- node: the kubelet, container runtime interface, pod lifecycle, probes, resource managers (CPU, memory, topology), in-place pod resize, device plugins and DRA, node shutdown.\n- release: the release process and release tooling.\n- scalability: large-cluster performance and scalability tests.\n- scheduling: kube-scheduler, the scheduling framework, preemption, topology spread.\n- security: security audits, the vulnerability process, cross-cutting security policy.\n- storage: volumes, PV and PVC, CSI, storage classes, snapshots.\n- testing: test frameworks, the e2e framework, CI test tooling.\n- ui: Dashboard.\n- windows: Windows nodes and containers.\n\n## needs_human\ntrue if a SIG lead should look at it now: every critical-urgent issue, any regression, anything with security impact. false otherwise.\n\n## Rules that must hold\n- critical-urgent means needs_human true.\n- needs_human true means priority is not backlog.\n- regression means priority important-soon or critical-urgent.\n- feature, cleanup or documentation means priority is not critical-urgent.\n\n## summary\nOne line, at most 160 characters, stating the issue's core problem or request. Use only facts stated in the issue. Don't add names, versions, numbers, URLs, services or claims that aren't in the issue text.\n",
+                "role": "system"
+              },
+              {
+                "content": "TITLE: <start.title>\n\nBODY: \n<start.body>",
+                "role": "user"
+              }
+            ]
+          },
+          "model": {
+            "id": "model",
+            "type": "combobox",
+            "value": "claude-haiku-4-5"
+          },
+          "previousInteractionId": {
+            "id": "previousInteractionId",
+            "type": "short-input",
+            "value": null
+          },
+          "promptCaching": {
+            "id": "promptCaching",
+            "type": "switch",
+            "value": false
+          },
+          "reasoningEffort": {
+            "id": "reasoningEffort",
+            "type": "combobox",
+            "value": null
+          },
+          "responseFormat": {
+            "id": "responseFormat",
+            "type": "code",
+            "value": "{\n  \"name\": \"triage\",\n  \"strict\": true,\n  \"schema\": {\n    \"additionalProperties\": false,\n    \"properties\": {\n      \"category\": {\n        \"enum\": [\n          \"bug\",\n          \"regression\",\n          \"failing_test\",\n          \"flake\",\n          \"feature\",\n          \"cleanup\",\n          \"documentation\",\n          \"support\"\n        ],\n        \"type\": \"string\"\n      },\n      \"priority\": {\n        \"enum\": [\n          \"backlog\",\n          \"important-longterm\",\n          \"important-soon\",\n          \"critical-urgent\"\n        ],\n        \"type\": \"string\"\n      },\n      \"product_area\": {\n        \"enum\": [\n          \"api-machinery\",\n          \"apps\",\n          \"architecture\",\n          \"auth\",\n          \"autoscaling\",\n          \"cli\",\n          \"cloud-provider\",\n          \"cluster-lifecycle\",\n          \"contributor-experience\",\n          \"docs\",\n          \"etcd\",\n          \"instrumentation\",\n          \"k8s-infra\",\n          \"multicluster\",\n          \"network\",\n          \"node\",\n          \"release\",\n          \"scalability\",\n          \"scheduling\",\n          \"security\",\n          \"storage\",\n          \"testing\",\n          \"ui\",\n          \"windows\"\n        ],\n        \"type\": \"string\"\n      },\n      \"needs_human\": {\n        \"type\": \"boolean\"\n      },\n      \"summary\": {\n        \"maxLength\": 160,\n        \"minLength\": 1,\n        \"type\": \"string\"\n      }\n    },\n    \"required\": [\n      \"category\",\n      \"priority\",\n      \"product_area\",\n      \"needs_human\",\n      \"summary\"\n    ],\n    \"type\": \"object\"\n  }\n}\n"
+          },
+          "skills": {
+            "id": "skills",
+            "type": "skill-input",
+            "value": []
+          },
+          "slidingWindowSize": {
+            "id": "slidingWindowSize",
+            "type": "short-input",
+            "value": null
+          },
+          "slidingWindowTokens": {
+            "id": "slidingWindowTokens",
+            "type": "short-input",
+            "value": null
+          },
+          "temperature": {
+            "id": "temperature",
+            "type": "slider",
+            "value": 0
+          },
+          "thinkingLevel": {
+            "id": "thinkingLevel",
+            "type": "combobox",
+            "value": "none"
+          },
+          "tools": {
+            "id": "tools",
+            "type": "tool-input",
+            "value": []
+          },
+          "verbosity": {
+            "id": "verbosity",
+            "type": "combobox",
+            "value": null
+          },
+          "vertexCredential": {
+            "id": "vertexCredential",
+            "type": "oauth-input",
+            "value": null
+          },
+          "vertexLocation": {
+            "id": "vertexLocation",
+            "type": "short-input",
+            "value": null
+          },
+          "vertexManualCredential": {
+            "id": "vertexManualCredential",
+            "type": "short-input",
+            "value": null
+          },
+          "vertexProject": {
+            "id": "vertexProject",
+            "type": "short-input",
+            "value": null
+          }
+        },
+        "triggerMode": false,
+        "type": "agent"
+      }
+    },
+    "edges": [
+      {
+        "data": {},
+        "id": "14821973-e443-49c2-b91a-ca40c4e0dcd3",
+        "source": "430d99c0-4d96-439e-8354-f90726ed2386",
+        "sourceHandle": "source",
+        "target": "715da0b1-0f7c-4e15-aff4-37dcbf22b47e",
+        "targetHandle": "target",
+        "type": "default"
+      }
+    ],
+    "lastSaved": 1790357652143,
+    "loops": {},
+    "parallels": {},
+    "variables": {}
+  },
+  "workflow": "k8s-triage",
+  "workflow_id": "eeab34d0-1a81-467d-b0ff-4ca931c4fce0"
+}

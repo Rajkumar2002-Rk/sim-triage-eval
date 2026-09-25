@@ -1,0 +1,297 @@
+{
+  "deployed_at": "2026-09-25T17:17:46.268",
+  "deployment_version": 1,
+  "state": {
+    "blocks": {
+      "83bced5f-4bf0-4b71-95d3-d097008dfa70": {
+        "advancedMode": false,
+        "data": {
+          "canonicalModes": {
+            "files": "basic",
+            "vertexCredential": "basic"
+          }
+        },
+        "enabled": true,
+        "errorEnabled": false,
+        "height": 0,
+        "horizontalHandles": true,
+        "id": "83bced5f-4bf0-4b71-95d3-d097008dfa70",
+        "locked": false,
+        "name": "Agent",
+        "outputs": {
+          "content": {
+            "description": "Generated response content",
+            "type": "string"
+          },
+          "cost": {
+            "description": "Cost of the API call",
+            "type": "json"
+          },
+          "model": {
+            "description": "Model used for generation",
+            "type": "string"
+          },
+          "providerTiming": {
+            "description": "Provider timing information",
+            "type": "json"
+          },
+          "tokens": {
+            "description": "Token usage statistics",
+            "type": "json"
+          },
+          "toolCalls": {
+            "description": "Tool calls made",
+            "type": "json"
+          }
+        },
+        "position": {
+          "x": 556,
+          "y": -30
+        },
+        "subBlocks": {
+          "apiKey": {
+            "id": "apiKey",
+            "type": "short-input",
+            "value": "{{ANTHROPIC_API_KEY}}"
+          },
+          "attachmentFiles": {
+            "id": "attachmentFiles",
+            "type": "file-upload",
+            "value": null
+          },
+          "azureApiVersion": {
+            "id": "azureApiVersion",
+            "type": "short-input",
+            "value": null
+          },
+          "azureEndpoint": {
+            "id": "azureEndpoint",
+            "type": "short-input",
+            "value": null
+          },
+          "bedrockAccessKeyId": {
+            "id": "bedrockAccessKeyId",
+            "type": "short-input",
+            "value": null
+          },
+          "bedrockRegion": {
+            "id": "bedrockRegion",
+            "type": "short-input",
+            "value": null
+          },
+          "bedrockSecretKey": {
+            "id": "bedrockSecretKey",
+            "type": "short-input",
+            "value": null
+          },
+          "conversationId": {
+            "id": "conversationId",
+            "type": "short-input",
+            "value": null
+          },
+          "evaluationQuestions": {
+            "id": "evaluationQuestions",
+            "type": "code",
+            "value": null
+          },
+          "evaluationState": {
+            "id": "evaluationState",
+            "type": "long-input",
+            "value": null
+          },
+          "fallbackModels": {
+            "id": "fallbackModels",
+            "type": "model-fallback-list",
+            "value": null
+          },
+          "files": {
+            "id": "files",
+            "type": "short-input",
+            "value": null
+          },
+          "maxTokens": {
+            "id": "maxTokens",
+            "type": "short-input",
+            "value": null
+          },
+          "memoryType": {
+            "id": "memoryType",
+            "type": "dropdown",
+            "value": "none"
+          },
+          "messages": {
+            "id": "messages",
+            "type": "messages-input",
+            "value": [
+              {
+                "content": "You triage GitHub issues filed against Sim, an open-source platform for building and deploying AI agent workflows. For each issue, return a JSON object with category, priority, product_area, needs_human and summary. Judge only what the issue says.\n\n## category\n- bug: Sim behaves wrongly (error, crash, wrong output, broken install or build).\n- feature_request: a change to existing Sim behavior, UI, limits or config, including code refactors proposed by contributors.\n- integration_request: a new third-party tool, block, trigger, LLM provider or service.\n- question: asks how something works or whether something is intended, without asserting a defect.\n- docs: documentation is wrong, missing or unclear, and that is the main complaint.\n- security: a vulnerability, auth bypass, data exposure or DoS risk, or a follow-up on a security disclosure.\n- invalid: spam, empty, off-topic, a bot comment or a misfiled PR review.\n\nTie-breakers, in order:\n1. Any credible security impact means security.\n2. \"X doesn't work\", even when phrased as a question, is bug.\n3. A new external service is integration_request. New operations on an integration Sim already has are feature_request.\n4. If missing docs make setup fail, it's bug. If setup works and only the docs are wrong, it's docs.\n\n## priority (low < medium < high < urgent)\n- urgent: security vulnerability, data loss or corruption, or a core path broken for most users.\n- high: a bug blocking the reporter's main use of Sim with no workaround; an install or self-hosting blocker, unless the issue itself gives a working workaround (then medium).\n- medium: a bug with a workaround or in a narrow feature; a well-argued feature or integration request.\n- low: cosmetic issues, speculative ideas, questions, docs nits, invalid.\n\n## product_area\nPick where the fix would most likely go.\n- self_hosting: Docker, Compose, Kubernetes, Helm, env vars, migrations, running a deployed instance, and running Sim from source to use it.\n- dev_setup: contributing to Sim's code (devcontainers, tests, lint and build tooling).\n- workflow_editor: the canvas and editor UI, block configuration UI, undo and redo, layout, import and export.\n- execution_engine: running workflows (block execution, variables, loops, parallel, function blocks, timeouts, streaming).\n- agents_models: the Agent block, LLM providers and models.\n- copilot: Copilot and Mothership chat.\n- integrations: third-party tool blocks, OAuth connections, third-party triggers.\n- mcp: MCP servers and tools.\n- api_deployment: deploying workflows, the public API, webhooks, schedules, chat deploy.\n- auth_accounts: login, SSO, invites, workspaces, permissions, billing and usage limits, whitelabeling.\n- logs_observability: logs, traces, cost tracking, audit trails.\n- other: none of the above, and every invalid issue.\n\n## needs_human\ntrue if a maintainer must look now: any security issue, any urgent issue, or a high bug where the reporter is blocked. false for a clear bug or request that can be labeled and queued, a question the docs answer, or spam.\n\n## Rules that must hold\n- needs_human true means priority is not low.\n- security means needs_human true and priority high or urgent.\n- invalid means priority low, needs_human false, product_area other.\n- urgent means needs_human true.\n- integration_request means product_area is integrations, mcp or agents_models.\n- docs means priority low or medium.\n- question means priority is not urgent.\n\n## summary\nOne line, at most 160 characters, stating the issue's core problem or request. Use only facts stated in the issue. Don't add names, versions, numbers, URLs, services or claims that aren't in the issue text.\n",
+                "role": "system"
+              },
+              {
+                "content": "TITLE: <start.title>\n\nBODY: \n<start.body>",
+                "role": "user"
+              }
+            ]
+          },
+          "model": {
+            "id": "model",
+            "type": "combobox",
+            "value": "claude-haiku-4-5"
+          },
+          "previousInteractionId": {
+            "id": "previousInteractionId",
+            "type": "short-input",
+            "value": null
+          },
+          "promptCaching": {
+            "id": "promptCaching",
+            "type": "switch",
+            "value": false
+          },
+          "reasoningEffort": {
+            "id": "reasoningEffort",
+            "type": "combobox",
+            "value": null
+          },
+          "responseFormat": {
+            "id": "responseFormat",
+            "type": "code",
+            "value": "{\n  \"name\": \"triage\",\n  \"strict\": true,\n  \"schema\": {\n    \"additionalProperties\": false,\n    \"properties\": {\n      \"category\": {\n        \"enum\": [\n          \"bug\",\n          \"feature_request\",\n          \"integration_request\",\n          \"question\",\n          \"docs\",\n          \"security\",\n          \"invalid\"\n        ],\n        \"type\": \"string\"\n      },\n      \"priority\": {\n        \"enum\": [\n          \"low\",\n          \"medium\",\n          \"high\",\n          \"urgent\"\n        ],\n        \"type\": \"string\"\n      },\n      \"product_area\": {\n        \"enum\": [\n          \"self_hosting\",\n          \"dev_setup\",\n          \"workflow_editor\",\n          \"execution_engine\",\n          \"agents_models\",\n          \"copilot\",\n          \"integrations\",\n          \"mcp\",\n          \"api_deployment\",\n          \"auth_accounts\",\n          \"logs_observability\",\n          \"other\"\n        ],\n        \"type\": \"string\"\n      },\n      \"needs_human\": {\n        \"type\": \"boolean\"\n      },\n      \"summary\": {\n        \"maxLength\": 160,\n        \"minLength\": 1,\n        \"type\": \"string\"\n      }\n    },\n    \"required\": [\n      \"category\",\n      \"priority\",\n      \"product_area\",\n      \"needs_human\",\n      \"summary\"\n    ],\n    \"type\": \"object\"\n  }\n}\n"
+          },
+          "skills": {
+            "id": "skills",
+            "type": "skill-input",
+            "value": []
+          },
+          "slidingWindowSize": {
+            "id": "slidingWindowSize",
+            "type": "short-input",
+            "value": null
+          },
+          "slidingWindowTokens": {
+            "id": "slidingWindowTokens",
+            "type": "short-input",
+            "value": null
+          },
+          "temperature": {
+            "id": "temperature",
+            "type": "slider",
+            "value": 0
+          },
+          "thinkingLevel": {
+            "id": "thinkingLevel",
+            "type": "combobox",
+            "value": "none"
+          },
+          "tools": {
+            "id": "tools",
+            "type": "tool-input",
+            "value": []
+          },
+          "verbosity": {
+            "id": "verbosity",
+            "type": "combobox",
+            "value": null
+          },
+          "vertexCredential": {
+            "id": "vertexCredential",
+            "type": "oauth-input",
+            "value": null
+          },
+          "vertexLocation": {
+            "id": "vertexLocation",
+            "type": "short-input",
+            "value": null
+          },
+          "vertexManualCredential": {
+            "id": "vertexManualCredential",
+            "type": "short-input",
+            "value": null
+          },
+          "vertexProject": {
+            "id": "vertexProject",
+            "type": "short-input",
+            "value": null
+          }
+        },
+        "triggerMode": false,
+        "type": "agent"
+      },
+      "df24dff6-7438-40b5-901c-5f8fc194a90d": {
+        "advancedMode": false,
+        "data": {},
+        "enabled": true,
+        "errorEnabled": false,
+        "height": 0,
+        "horizontalHandles": true,
+        "id": "df24dff6-7438-40b5-901c-5f8fc194a90d",
+        "locked": false,
+        "name": "Start",
+        "outputs": {
+          "conversationId": {
+            "description": "Conversation thread identifier",
+            "type": "string"
+          },
+          "files": {
+            "description": "User uploaded files",
+            "type": "file[]"
+          },
+          "input": {
+            "description": "Primary user input or message",
+            "type": "string"
+          }
+        },
+        "position": {
+          "x": 104,
+          "y": -84
+        },
+        "subBlocks": {
+          "inputFormat": {
+            "id": "inputFormat",
+            "type": "input-format",
+            "value": [
+              {
+                "collapsed": false,
+                "id": "e3d9a2e8-07b4-41ed-8a6f-4a96bbf99024",
+                "name": "title",
+                "type": "string",
+                "value": ""
+              },
+              {
+                "collapsed": false,
+                "id": "d5b1a675-4a0d-46ed-8237-2b786e6fb1d5",
+                "name": "body",
+                "type": "string",
+                "value": ""
+              }
+            ]
+          },
+          "runMetadata": {
+            "id": "runMetadata",
+            "type": "switch",
+            "value": false
+          }
+        },
+        "triggerMode": false,
+        "type": "start_trigger"
+      }
+    },
+    "edges": [
+      {
+        "data": {},
+        "id": "f8d03974-ac2d-4011-a894-f23898eb5689",
+        "source": "df24dff6-7438-40b5-901c-5f8fc194a90d",
+        "sourceHandle": "source",
+        "target": "83bced5f-4bf0-4b71-95d3-d097008dfa70",
+        "targetHandle": "target",
+        "type": "default"
+      }
+    ],
+    "lastSaved": 1790356666264,
+    "loops": {},
+    "parallels": {},
+    "variables": {}
+  },
+  "workflow": "sim-triage",
+  "workflow_id": "193b994d-5b1a-4346-8359-2a74f92d19b8"
+}
