@@ -269,7 +269,8 @@ def mutation_recall(d):
         for checker, hit in c.items():
             per[m["operator"]][checker][0] += hit
             per[m["operator"]][checker][1] += 1
-    keyed = sorted({f for k in d.key.values() for f in k})
+    graded = set(FIELDS) | {"category_coarse"}
+    keyed = sorted({f for k in d.key.values() for f in k if f in graded})
     return {"by_operator": {op: {ch: wilson(k, n) for ch, (k, n) in v.items()} for op, v in per.items()},
             "not_applicable": dict(not_applicable),
             "fields_with_answer_key": keyed}
