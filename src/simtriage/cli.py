@@ -96,6 +96,11 @@ def cmd_evaluate(args):
     return EXIT_OK
 
 
+def cmd_adjudicate(args):
+    from . import adjudicate
+    return (adjudicate.run_key if args.queue == "key" else adjudicate.run_gates)(".", args.version)
+
+
 def cmd_report(args):
     from . import report
     d = _data(args)
@@ -159,6 +164,11 @@ def main(argv=None):
     ev.add_argument("--dry-run", action="store_true", help="print the planned call count; no API calls")
     ev.add_argument("--workflow-id")
     ev.set_defaults(fn=cmd_evaluate)
+
+    ad = sub.add_parser("adjudicate", help="human review: blind key disagreements or gate failures")
+    ad.add_argument("--queue", choices=("key", "gates"), required=True)
+    ad.add_argument("--version", default="v1")
+    ad.set_defaults(fn=cmd_adjudicate)
 
     rp = sub.add_parser("report", help="rebuild all numbers offline from committed files")
     common(rp)

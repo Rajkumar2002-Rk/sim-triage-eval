@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import report
-from .runner import execute_with_backoff, is_done
+from .runner import execute_with_backoff
 from .sim_client import flatten_spans
 
 METRICS = ("classification", "faithfulness", "consistency")
@@ -126,4 +126,6 @@ def done_keys_eval(out_path):
     p = Path(out_path)
     if not p.exists():
         return set()
-    return {(r["input_id"], r["repeat"]) for r in map(json.loads, p.open()) if is_done(r)}
+    # Only a successfully scored check is done; any failure (rate limit, provider
+    # error, unparseable scores) is retried on the next run.
+    return {(r["input_id"], r["repeat"]) for r in map(json.loads, p.open()) if r.get("ok")}

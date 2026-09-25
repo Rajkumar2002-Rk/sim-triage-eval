@@ -77,3 +77,10 @@ def test_plan_jobs_repeats_only_the_variance_subset():
     rows = [{"input_id": f"x{i}"} for i in range(10)]
     jobs = evaluator.plan_jobs(rows, extra_repeats=2, variance_n=3)
     assert sum(k == 0 for _, k in jobs) == 10 and len(jobs) == 10 + 3 * 2
+
+
+def test_failed_checks_are_retried(tmp_path):
+    out = tmp_path / "e.jsonl"
+    out.write_text(json.dumps({"input_id": "a", "repeat": 0, "http_status": 200, "ok": False}) + "\n"
+                   + json.dumps({"input_id": "b", "repeat": 0, "http_status": 200, "ok": True}) + "\n")
+    assert evaluator.done_keys_eval(out) == {("b", 0)}

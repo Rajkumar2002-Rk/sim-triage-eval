@@ -42,12 +42,12 @@ def apply_adjudications(key, adjudications):
 
 
 def best_records(rows, key):
-    """One record per key: the last one that reached Sim and wasn't rate-limited,
-    else the last attempt. Every attempt stays in the file for telemetry."""
+    """One record per key: the last successful one (for Evaluator rows, `ok`), else
+    the last attempt. Every attempt stays in the file for telemetry."""
     best = {}
     for r in rows:
         k = tuple(r[f] for f in key)
-        done = r.get("http_status") not in (None, 429)
+        done = r["ok"] if "ok" in r else r.get("http_status") not in (None, 429)
         if done or k not in best or best[k].get("http_status") in (None, 429):
             best[k] = r
     return list(best.values())
@@ -335,6 +335,16 @@ def key_disagreements(d):
             "key_was_wrong": wilson(verdicts["model_right"] + verdicts["neither"], len(adj))}
 
 
+def gate_adjudications(d):
+    """Per gate: how many real-output failures a human judged true defects vs false alarms."""
+    out = defaultdict(lambda: {"true_defect": 0, "false_alarm": 0})
+    for a in d.adjudications:
+        if a.get("kind") == "gate_failure":
+            out[a["gate"]][a["verdict"]] += 1
+    return {g: {**v, "false_alarm_share": wilson(v["false_alarm"], v["true_defect"] + v["false_alarm"])}
+            for g, v in out.items()} or None
+
+
 def overall_label_free_mutation_recall(d):
     hits = [caught(m["output"], d.issues[m["issue_id"]], d.key[m["issue_id"]], d.tax)["label_free"]
             for m in d.mutants if m["applicable"]]
@@ -364,6 +374,7 @@ def build(d, split):
         "evaluator_sweep": evaluator_sweep(d) if d.evaluator else None,
         "evaluator_stability": evaluator_stability(d) if d.evaluator else None,
         "key_disagreements": key_disagreements(d),
+        "gate_adjudications": gate_adjudications(d),
     }
 
 
