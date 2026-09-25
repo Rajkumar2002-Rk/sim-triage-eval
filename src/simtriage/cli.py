@@ -56,6 +56,61 @@ def cmd_run(args):
     return EXIT_OK
 
 
+def _data(args):
+    from . import report
+    d = report.Data(".", args.version)
+    if not d.outputs:
+        print(f"no recorded outputs for {args.version} in runs/{args.version}/", file=sys.stderr)
+        return None
+    return d
+
+
+def cmd_mutate(args):
+    from . import report
+    d = _data(args)
+    if d is None:
+        return EXIT_NO_DATA
+    n_seeds, n_mut = report.write_mutants(d)
+    if n_seeds == 0:
+        print("no correct outputs to use as seeds", file=sys.stderr)
+        return EXIT_NO_DATA
+    print(f"{n_seeds} seeds -> {n_mut} mutants in runs/{args.version}/mutants.jsonl")
+    return EXIT_OK
+
+
+METRICS = ("pass_rate", "label_free_mutation_recall")
+
+
+def cmd_report(args):
+    import json
+
+    from . import report
+    d = _data(args)
+    if d is None:
+        return EXIT_NO_DATA
+    if not d.labels:
+        print("no labels; nothing to score against", file=sys.stderr)
+        return EXIT_NO_DATA
+    rep = report.build(d, args.split)
+    if args.json:
+        Path(args.json).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.json).write_text(json.dumps(rep, indent=2) + "\n")
+    value = (rep["regression_pass_rate"] if args.metric == "pass_rate"
+             else report.overall_label_free_mutation_recall(d))
+    if value is None:
+        print(f"metric {args.metric} has no data", file=sys.stderr)
+        return EXIT_NO_DATA
+    f = rep["fields"]
+    print(f"{d.version} / {args.split}: category {f['category']['accuracy']['p']:.2f}  "
+          f"priority {f['priority']['accuracy']['p']:.2f}  area {f['product_area']['accuracy']['p']:.2f}  "
+          f"needs_human {f['needs_human']['accuracy']['p']:.2f}")
+    print(f"{args.metric} = {value['p']:.3f} [{value['lo']:.3f}, {value['hi']:.3f}] (n={value['n']})")
+    if args.fail_under is not None and value["p"] < args.fail_under:
+        print(f"FAIL: {args.metric} {value['p']:.3f} < --fail-under {args.fail_under}")
+        return EXIT_BELOW
+    return EXIT_OK
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="simtriage")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -79,6 +134,18 @@ def main(argv=None):
     rn.add_argument("--workflow-id")
     rn.add_argument("--out")
     rn.set_defaults(fn=cmd_run)
+
+    mu = sub.add_parser("mutate", help="generate the mutant set from correct outputs")
+    mu.add_argument("--version", required=True)
+    mu.set_defaults(fn=cmd_mutate)
+
+    rp = sub.add_parser("report", help="rebuild all numbers offline from committed files")
+    rp.add_argument("--version", required=True)
+    rp.add_argument("--split", choices=("dev", "test", "all"), default="test")
+    rp.add_argument("--metric", choices=METRICS, default="pass_rate")
+    rp.add_argument("--fail-under", type=float)
+    rp.add_argument("--json", help="write the full report here")
+    rp.set_defaults(fn=cmd_report)
 
     try:
         args = p.parse_args(argv)
