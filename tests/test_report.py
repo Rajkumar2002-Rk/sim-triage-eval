@@ -92,3 +92,11 @@ def test_cli_exit_codes(project):
     assert cli.main(["report", "--version", "v1", "--split", "all",
                      "--metric", "label_free_mutation_recall", "--json", "out/r.json"]) == 0
     assert json.loads((project / "out/r.json").read_text())["mutation"]["by_operator"]
+
+
+def test_excluded_issue_is_dropped_everywhere(project):
+    (project / "data/excluded.json").write_text(json.dumps({"sim-4": "calibration"}))
+    d = report.Data(".", "v1")
+    assert "sim-4" not in d.ids("all") and "sim-4" not in d.ids("test")
+    assert report.field_metrics(d, "all")["category"]["accuracy"]["n"] == 3
+    assert all(s["issue_id"] != "sim-4" for s in report.seeds(d))

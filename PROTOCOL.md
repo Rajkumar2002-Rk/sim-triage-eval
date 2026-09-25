@@ -147,3 +147,8 @@ secrets. CI runs the report and the test suite offline.
 
 - 2026-09-25, before any model output: added section 6b (adjudication).
   Measuring false alarms on seeds would have been circular.
+- 2026-09-25, during labeling, before any model output on sampled issues:
+  sim-1782 (test split) was labeled jointly with Claude as a worked example
+  while the labeler learned the guide. It is excluded from every metric
+  (`data/excluded.json`), so test has n=39 and the total is n=99. The labeler
+  labels all other issues alone.

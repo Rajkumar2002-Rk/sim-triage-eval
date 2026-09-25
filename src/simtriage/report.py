@@ -33,9 +33,15 @@ class Data:
         self.adjudications = by_id(load_jsonl(r / "data/adjudications.jsonl"), "record_id")
         self.recheck = by_id(load_jsonl(r / "data/labels_recheck.jsonl"))
         self.maintainer = by_id(load_jsonl(r / "data/maintainer_labels_HIDDEN.jsonl"))
+        ex = r / "data/excluded.json"
+        self.excluded = set(json.load(open(ex))) if ex.exists() else set()
+        for table in (self.issues, self.labels, self.recheck, self.maintainer):
+            for i in self.excluded:
+                table.pop(i, None)
 
     def ids(self, split):
-        return sorted(self.issues) if split == "all" else sorted(self.split[split])
+        ids = self.issues if split == "all" else self.split[split]
+        return sorted(i for i in ids if i not in self.excluded)
 
     def primary(self, split):
         """Repeat 0 of each issue: the output the metrics are computed on."""
