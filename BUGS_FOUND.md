@@ -55,3 +55,14 @@ listed separately, and each gets a pinned regression test.
   cost is derived as total minus Sim's fixed $0.005 fee, the derived count is
   reported, and the client now waits for items. Pinned:
   `tests/test_regressions.py::test_2026_09_25_*`.
+- 2026-09-26, `summary_entities` gate: on real v1 outputs it flagged 11
+  summaries, and the blind review found only 2 real problems (18%). Six false
+  alarms were formatting only: hyphenated compounds (`Stripe-only`,
+  `ContainerOS-specific`, `OpenAI-compatible`), a possessive (`Manager's`) and
+  punctuation (`Next.js` vs "nextjs", `UNAUTHORIZED_INVALID_API_KEY` vs
+  "UNAUTHORIZED:_INVALID_API_KEY"). The fix (match v2) accepts those forms.
+  Real flags dropped from 11 to 5 (2 true, 3 needing meaning: "Windows" vs
+  "Win11", "SSL" vs "local issuer certificate", "compatible" vs
+  "compatibility"), and invented-entity mutation recall is unchanged (74/187
+  Sim, 16/33 Kubernetes). Pinned: `tests/test_regressions.py::test_2026_09_26_*`.
+

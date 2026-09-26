@@ -170,12 +170,38 @@ def _non_initial_capitalized(text):
     return out
 
 
-def gate_summary_entities(obj, source):
+def _squash(text):
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def entity_supported(token, source, match="v2"):
+    """Is a capitalized summary word supported by the issue text?
+    v1 (pre-registered): the exact token appears, case-insensitively.
+    v2 (after reviewing 11 real false alarms, 2026-09-26): also accept the token
+    with punctuation removed ("Next.js" ~ "nextjs", "UNAUTHORIZED_X" ~ "UNAUTHORIZED:_X"),
+    a possessive stripped ("Manager's"), or every part of a hyphenated or
+    underscored compound present ("Stripe-only", "ContainerOS-specific")."""
+    low = source.lower()
+    if token.lower() in low:
+        return True
+    if match == "v1":
+        return False
+    base = re.sub(r"['’]s$", "", token)
+    if base.lower() in low:
+        return True
+    squashed = _squash(base)
+    if len(squashed) >= 4 and squashed in _squash(source):
+        return True
+    parts = [p for p in re.split(r"[-_.:'’]", base) if p]
+    return len(parts) > 1 and all(p.lower() in low for p in parts)
+
+
+def gate_summary_entities(obj, source, match="v2"):
     s = _summary(obj)
     if s is None:
         return GateResult("summary_entities", SKIP, "no summary string")
     candidates = {w for w in _non_initial_capitalized(s) if w not in ENTITY_STOPLIST}
-    bad = _missing(candidates, source)
+    bad = sorted(w for w in candidates if not entity_supported(w, source, match))
     return GateResult("summary_entities", FAIL if bad else PASS, ",".join(bad))
 
 

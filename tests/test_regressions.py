@@ -32,3 +32,54 @@ def test_2026_09_25_get_log_waits_for_cost_items():
     c = SimClient("http://sim", "k", transport=httpx.MockTransport(handler))
     _, log, _ = c.get_log("r", sleep=lambda s: None)
     assert log["cost"]["items"] and polls["n"] == 3
+
+
+# Pinned to the 11 real summary_entities failures on v1 outputs, reviewed by hand
+# on 2026-09-25 (data/*/adjudications.jsonl). The v2 match must clear the
+# formatting-only false alarms and still flag both true defects.
+import json
+from pathlib import Path
+
+import pytest
+
+from simtriage import gates
+
+
+def _issue(ds, iid):
+    for line in Path(f"data/{ds}/issues.jsonl").open():
+        r = json.loads(line)
+        if r["id"] == iid:
+            return f"{r['title']}\n{r['body']}"
+    raise KeyError(iid)
+
+
+@pytest.mark.parametrize("ds,iid,token", [
+    ("sim", "sim-1579", "OpenAI-compatible"),
+    ("sim", "sim-1724", "UNAUTHORIZED_INVALID_API_KEY"),
+    ("sim", "sim-2580", "Next.js"),
+    ("sim", "sim-906", "Stripe-only"),
+    ("k8s", "k8s-133915", "ContainerOS-specific"),
+    ("k8s", "k8s-137700", "Manager's"),
+])
+def test_2026_09_26_formatting_false_alarms_cleared(ds, iid, token):
+    src = _issue(ds, iid)
+    assert not gates.entity_supported(token, src, match="v1")      # the pre-registered gate failed here
+    assert gates.entity_supported(token, src, match="v2")
+
+
+@pytest.mark.parametrize("ds,iid,token", [
+    ("sim", "sim-720", "Compose"),
+    ("sim", "sim-1098", "CVEs"),
+])
+def test_2026_09_26_true_defects_still_flagged(ds, iid, token):
+    assert not gates.entity_supported(token, _issue(ds, iid), match="v2")
+
+
+@pytest.mark.parametrize("ds,iid,token", [
+    ("sim", "sim-1204", "Windows"),        # issue says "Win11"
+    ("sim", "sim-1889", "SSL"),            # issue says "local issuer certificate"
+    ("sim", "sim-801", "OpenAI-compatible"),  # issue says "compatibility"
+])
+def test_2026_09_26_semantic_false_alarms_remain_known_limit(ds, iid, token):
+    # These need meaning, not string matching; documented as a known limit.
+    assert not gates.entity_supported(token, _issue(ds, iid), match="v2")

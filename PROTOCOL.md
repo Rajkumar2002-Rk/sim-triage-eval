@@ -151,4 +151,11 @@ and CI runs it.
   alone), plus a blind, shuffled sample of 15 Sim seeds the Evaluator flagged
   on classification and 15 it didn't. The reviewer is never shown scores or
   group membership. The report gives the "really wrong" rate for both groups.
+- 2026-09-26, after the gate-failure review: the `summary_entities` gate's
+  matching was changed (v1 exact match → v2, which also accepts punctuation,
+  possessive and hyphenated forms). This is a change made after seeing
+  outputs, so both are reported: v1 flagged 11 real outputs (2 true defects);
+  v2 flags 5 (the same 2 plus 3 that need semantic judgment). Mutation recall
+  for invented entities is identical under both. The report uses v2 from here
+  on.
 
