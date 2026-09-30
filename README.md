@@ -85,7 +85,7 @@ I kept a dated list of everything confusing or surprising: [FRICTION.md](FRICTIO
 - The logs API can report `completed` before the log is final: once without an end time, and once, in 24% of runs, without the cost breakdown, which is written about 17ms later.
 - The Evaluator block's docs describe a different default model and settings than the code. Temperature and the system prompt are hidden and fixed. Its prompt asks for "only scores", yet it averaged 683 output tokens, so each check cost about $0.012, 2.5x what a single test call suggested.
 - The Agent block's temperature slider sits under "Show additional fields" and defaults to 0.3.
-- Batch calls at modest concurrency got `429 RATE_LIMITED` responses (156 of 1,077 calls in the first batch), even though Sim's self-hosting docs say installs with billing disabled run with no rate limits, and I hadn't set any of the opt-in limit variables. I haven't pinned down which limiter fired yet.
+- Batch calls at modest concurrency got `429 RATE_LIMITED` responses (156 of 1,077 calls in the first batch), even though Sim's self-hosting docs say installs with billing disabled run with no rate limits. Sim's server logs showed the cause: a fixed pre-auth limit on the v2 API of 600 requests, then 300 per minute, per client IP (`v2:preauth:ip:172.19.0.1`). It ignores the billing setting and has no config variable, and on Docker every request from the host shares the gateway IP. I reproduced it with 800 requests: the first 600 got 401 (fake key) and the rest got 429.
 - Sim's structured output enforces the allowed values but not string length. One summary came back at 166 characters against a 160 limit, and my schema check caught it.
 
 ## What broke in my own checker

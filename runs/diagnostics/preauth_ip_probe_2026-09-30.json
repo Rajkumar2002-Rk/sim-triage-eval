@@ -1,0 +1,1 @@
+{"counts": {"401": 600, "429": 200}, "first_429": 599, "seconds": 2.9258054590027314, "headers_429": {"retry-after": "7", "x-ratelimit-limit": "600", "x-ratelimit-remaining": "0", "x-ratelimit-reset": "2026-09-30T06:32:51.090Z"}}
